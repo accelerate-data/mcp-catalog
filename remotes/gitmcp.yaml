@@ -1,6 +1,6 @@
 name: GitMCP
 entryKey: obot-gitmcp
-serverUserType: singleUser
+serverUserType: multiUser
 shortDescription: Access any GitHub project's documentation and code in real-time with AI assistance
 description: |
   Turn any public GitHub project into an up-to-date documentation hub with [GitMCP](https://gitmcp.io), giving AI tools current documentation and code context.
