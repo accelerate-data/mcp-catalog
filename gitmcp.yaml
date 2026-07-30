@@ -1,6 +1,6 @@
 name: GitMCP
 entryKey: obot-gitmcp
-serverUserType: singleUser
+serverUserType: multiUser
 shortDescription: Access any GitHub project's documentation and code in real-time with AI assistance
 description: |
   A Model Context Protocol (MCP) server that transforms any GitHub project into a documentation hub. It enables AI tools like Cursor to access up-to-date documentation and code, eliminating code hallucinations by providing real-time access to the latest project information.
