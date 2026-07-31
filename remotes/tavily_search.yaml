@@ -1,6 +1,6 @@
 name: Tavily Search
 entryKey: obot-tavily-search
-serverUserType: singleUser
+serverUserType: multiUser
 shortDescription: Real-time web research, data extraction, and domain crawling with AI ranking
 description: '![Tavily Crawl Beta](https://raw.githubusercontent.com/tavily-ai/tavily-mcp/main/assets/Banner_NEW.png)
 

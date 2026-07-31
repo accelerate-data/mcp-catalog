@@ -1,6 +1,6 @@
 name: GitHub
 entryKey: obot-github
-serverUserType: singleUser
+serverUserType: multiUser
 shortDescription: Manage GitHub repositories, issues, PRs, workflows, and CI/CD operations
 upgradeNote: |
   This entry now requires selecting a GitHub-hosted MCP endpoint path so each connection can use a specific toolset and access mode.
