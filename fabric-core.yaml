@@ -169,7 +169,7 @@ toolPreview:
     description: Delete an empty folder. Folders must be empty before deletion.
     params:
       workspaceId: ID of the workspace containing the folder
-      folderId: ID of the folder to delete; must be empty
+      folderId: ID of the folder to delete
   - name: move_folder
     description: Move a folder to a new parent folder.
     params:
