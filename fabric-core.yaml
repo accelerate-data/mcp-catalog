@@ -25,60 +25,169 @@ remoteConfig:
 toolPreview:
   - name: search_catalog
     description: Search the OneLake catalog for items across workspaces by display name, description, or workspace name, optionally filtered by item type.
+    params:
+      search: Text query searched against item display name, description, and workspace display name
+      filter: Optional filter expression to restrict results by item type (e.g. Type eq 'Lakehouse')
+      pageSize: Number of results to return per page (1-1000)
+      continuationToken: Token for retrieving the next page of results
   - name: list_workspaces
     description: List all Fabric workspaces you have access to.
+    params:
+      roles: Comma-separated list of workspace roles to filter by (Admin, Member, Contributor, Viewer)
+      continuationToken: Token for retrieving the next page of results
+      preferWorkspaceSpecificEndpoints: Whether to return workspace-specific API and OneLake endpoints instead of general public ones
   - name: get_workspace
     description: Get detailed information about a specific workspace.
+    params:
+      workspaceId: ID of the workspace to retrieve
+      preferWorkspaceSpecificEndpoints: Whether to return workspace-specific API and OneLake endpoints instead of general public ones
   - name: create_workspace
     description: Create a new workspace in your Fabric tenant.
+    params:
+      displayName: Workspace display name, unique across the tenant
+      capacityId: ID of the capacity to assign to the workspace
+      description: Description of the workspace
+      domainId: ID of the domain to assign the workspace to
   - name: update_workspace
     description: Update a workspace's name or description.
+    params:
+      workspaceId: ID of the workspace to update
+      displayName: New workspace display name
+      description: New workspace description
   - name: delete_workspace
     description: Delete an existing workspace. This permanently removes all items within it.
+    params:
+      workspaceId: ID of the workspace to delete
   - name: add_workspace_role
     description: Grant a user access to a workspace.
+    params:
+      workspaceId: ID of the workspace to grant access to
+      principalId: ID of the user, group, or service principal to grant access to
+      principalType: Type of principal (User, Group, ServicePrincipal, ServicePrincipalProfile, EntireTenant)
+      role: Workspace role to grant (Admin, Member, Contributor, Viewer)
   - name: list_workspace_roles
     description: List all role assignments for a workspace.
+    params:
+      workspaceId: ID of the workspace to list role assignments for
+      continuationToken: Token for retrieving the next page of results
   - name: get_workspace_role
     description: Get details about a specific role assignment.
+    params:
+      workspaceId: ID of the workspace
+      workspaceRoleAssignmentId: ID of the role assignment to retrieve
   - name: update_workspace_role
     description: Change a user's role in a workspace.
+    params:
+      workspaceId: ID of the workspace
+      workspaceRoleAssignmentId: ID of the role assignment to update
+      role: New workspace role to assign (Admin, Member, Contributor, Viewer)
   - name: delete_workspace_role
     description: Remove a user's access to a workspace.
+    params:
+      workspaceId: ID of the workspace
+      workspaceRoleAssignmentId: ID of the role assignment to remove
   - name: list_items
     description: List all items in a workspace.
+    params:
+      workspaceId: ID of the workspace to list items from
+      type: Filter results to a specific item type
+      recursive: Whether to include items in nested folders (default true)
+      rootFolderId: Restrict results to items within a specific folder
+      continuationToken: Token for retrieving the next page of results
   - name: get_item
     description: Get detailed information about a specific item.
+    params:
+      workspaceId: ID of the workspace containing the item
+      itemId: ID of the item to retrieve
   - name: create_item
     description: Create a new item in a workspace.
+    params:
+      workspaceId: ID of the workspace to create the item in
+      displayName: Item display name
+      type: Fabric item type to create (e.g. Lakehouse, Notebook, Warehouse)
+      description: Description of the item
+      folderId: ID of the folder to create the item in (defaults to the workspace root)
+      creationPayload: Type-specific configuration used to create the item, mutually exclusive with definition
+      definition: Initial item definition, mutually exclusive with creationPayload
   - name: update_item
     description: Update an item's name or description.
+    params:
+      workspaceId: ID of the workspace containing the item
+      itemId: ID of the item to update
+      displayName: New item display name
+      description: New item description
   - name: delete_item
     description: Delete an item from a workspace.
+    params:
+      workspaceId: ID of the workspace containing the item
+      itemId: ID of the item to delete
+      hardDelete: Whether to permanently delete the item instead of a soft delete
   - name: get_item_definition
     description: Get the schema or definition of an item.
+    params:
+      workspaceId: ID of the workspace containing the item
+      itemId: ID of the item whose definition to retrieve
+      format: Format to return the item definition in
   - name: update_item_definition
     description: Update an item's definition or schema.
+    params:
+      workspaceId: ID of the workspace containing the item
+      itemId: ID of the item whose definition to update
+      definition: New item definition
+      updateMetadata: Whether to also update the item's display name and description from the definition
   - name: bulk_move_items
     description: Move multiple items to a folder.
+    params:
+      workspaceId: ID of the workspace containing the items
+      items: IDs of the items to move (up to 50)
+      targetFolderId: ID of the destination folder (defaults to the workspace root)
   - name: create_folder
     description: Create a new folder in a workspace.
+    params:
+      workspaceId: ID of the workspace to create the folder in
+      displayName: Folder display name
+      parentFolderId: ID of the parent folder (defaults to the workspace root)
   - name: list_folders
     description: List all folders in a workspace.
+    params:
+      workspaceId: ID of the workspace to list folders from
+      rootFolderId: Restrict results to folders under a specific parent folder (defaults to the workspace root)
+      recursive: Whether to include nested folders (default true)
+      continuationToken: Token for retrieving the next page of results
   - name: get_folder
     description: Get details about a specific folder.
+    params:
+      workspaceId: ID of the workspace containing the folder
+      folderId: ID of the folder to retrieve
   - name: update_folder
     description: Rename a folder.
+    params:
+      workspaceId: ID of the workspace containing the folder
+      folderId: ID of the folder to rename
+      displayName: New folder display name
   - name: delete_folder
     description: Delete an empty folder. Folders must be empty before deletion.
+    params:
+      workspaceId: ID of the workspace containing the folder
+      folderId: ID of the folder to delete; must be empty
   - name: move_folder
     description: Move a folder to a new parent folder.
+    params:
+      workspaceId: ID of the workspace containing the folder
+      folderId: ID of the folder to move
+      targetFolderId: ID of the destination folder (defaults to the workspace root)
   - name: list_capacities
     description: List all Fabric capacities you have access to.
+    params:
+      continuationToken: Token for retrieving the next page of results
   - name: get_operation_state
     description: Check the status of a long-running operation.
+    params:
+      operationId: ID of the long-running operation to check
   - name: get_operation_result
     description: Get the result of a completed operation.
+    params:
+      operationId: ID of the completed long-running operation to retrieve the result for
   - name: get_knowledge
     description: Get guidelines and best practices for Fabric item types.
 
