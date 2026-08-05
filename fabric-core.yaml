@@ -73,25 +73,25 @@ toolPreview:
   - name: get_workspace_role
     description: Get details about a specific role assignment.
     params:
-      workspaceId: ID of the workspace
+      workspaceId: ID of the workspace containing the role assignment
       workspaceRoleAssignmentId: ID of the role assignment to retrieve
   - name: update_workspace_role
     description: Change a user's role in a workspace.
     params:
-      workspaceId: ID of the workspace
+      workspaceId: ID of the workspace containing the role assignment
       workspaceRoleAssignmentId: ID of the role assignment to update
       role: New workspace role to assign (Admin, Member, Contributor, Viewer)
   - name: delete_workspace_role
     description: Remove a user's access to a workspace.
     params:
-      workspaceId: ID of the workspace
+      workspaceId: ID of the workspace containing the role assignment
       workspaceRoleAssignmentId: ID of the role assignment to remove
   - name: list_items
     description: List all items in a workspace.
     params:
       workspaceId: ID of the workspace to list items from
       type: Filter results to a specific item type
-      recursive: Whether to include items in nested folders (default true)
+      recursive: 'Whether to include items in nested folders (default: true)'
       rootFolderId: Restrict results to items within a specific folder
       continuationToken: Token for retrieving the next page of results
   - name: get_item
@@ -152,7 +152,7 @@ toolPreview:
     params:
       workspaceId: ID of the workspace to list folders from
       rootFolderId: Restrict results to folders under a specific parent folder (defaults to the workspace root)
-      recursive: Whether to include nested folders (default true)
+      recursive: 'Whether to include nested folders (default: true)'
       continuationToken: Token for retrieving the next page of results
   - name: get_folder
     description: Get details about a specific folder.
