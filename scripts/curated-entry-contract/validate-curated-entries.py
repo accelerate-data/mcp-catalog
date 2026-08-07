@@ -17,15 +17,30 @@ from pathlib import Path
 import yaml
 
 # Each curated entry pins the values Studio depends on. Add a row per curated
-# entry; the structural checks below apply to all of them.
+# entry; the structural checks below apply to all of them. The runtime selects
+# which config block is pinned and which authorization contract is enforced.
 CURATED_ENTRIES: dict[str, dict[str, object]] = {
     "fabric-core.yaml": {
         "name": "Fabric Core",
         "entryKey": "obot-fabric-core",
         "serverUserType": "multiUser",
         "runtime": "remote",
-        "fixedURL": "https://api.fabric.microsoft.com/v1/mcp/core",
-        "staticOAuthRequired": True,
+        "remoteConfig": {
+            "fixedURL": "https://api.fabric.microsoft.com/v1/mcp/core",
+            "staticOAuthRequired": True,
+        },
+    },
+    "fabric-pro-dev.yaml": {
+        "name": "Fabric Pro-Dev",
+        "entryKey": "obot-fabric-pro-dev",
+        "serverUserType": "multiUser",
+        "runtime": "containerized",
+        "containerizedConfig": {
+            "image": "mcr.microsoft.com/fabric/fabric-mcp:1.2.0",
+            "port": 8080,
+            "path": "/",
+            "healthzPath": "/health",
+        },
     },
 }
 
@@ -38,6 +53,12 @@ REQUIRED_NON_EMPTY_STRINGS = (
     "icon",
     "repoURL",
 )
+
+# The manifest key that carries each runtime's connection config.
+RUNTIME_CONFIG_KEYS = {
+    "remote": "remoteConfig",
+    "containerized": "containerizedConfig",
+}
 
 
 def check_required_strings(manifest: dict, fail) -> None:
@@ -57,24 +78,21 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
         if actual != expected[field]:
             fail(f"{field} is {actual!r}, expected {expected[field]!r}")
 
-    remote_config = manifest.get("remoteConfig")
-    if not isinstance(remote_config, dict):
-        fail("remoteConfig must be a mapping")
+    config_key = RUNTIME_CONFIG_KEYS[str(expected["runtime"])]
+    config = manifest.get(config_key)
+    if not isinstance(config, dict):
+        fail(f"{config_key} must be a mapping")
         return
 
-    fixed_url = remote_config.get("fixedURL")
-    if fixed_url != expected["fixedURL"]:
-        fail(f"remoteConfig.fixedURL is {fixed_url!r}, expected {expected['fixedURL']!r}")
-
-    static_oauth = remote_config.get("staticOAuthRequired")
-    if static_oauth is not expected["staticOAuthRequired"]:
-        fail(
-            f"remoteConfig.staticOAuthRequired is {static_oauth!r}, "
-            f"expected {expected['staticOAuthRequired']!r}"
-        )
+    for field, want in (expected[config_key] or {}).items():  # type: ignore[union-attr]
+        got = config.get(field)
+        # `is not` for booleans so that 1 does not satisfy True.
+        mismatch = got is not want if isinstance(want, bool) else got != want
+        if mismatch:
+            fail(f"{config_key}.{field} is {got!r}, expected {want!r}")
 
 
-def check_user_scoped_auth(manifest: dict, fail) -> None:
+def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
     """A user-authorized remote entry must configure no deployment-wide credential.
 
     An env block or a remoteConfig header would make an operator-supplied secret
@@ -86,6 +104,78 @@ def check_user_scoped_auth(manifest: dict, fail) -> None:
     headers = (manifest.get("remoteConfig") or {}).get("headers")
     if headers:
         fail("remoteConfig.headers must be absent: no static credential is sent to the server")
+
+
+def check_containerized_auth(manifest: dict, fail) -> None:
+    """A containerized entry splits its credentials across two configuration tiers.
+
+    A containerized entry has no endpoint to configure, so it cannot use static
+    OAuth; an operator-supplied `env` block is legitimate there and carries the
+    deployment's own registration. The per-user credential must still come from
+    `multiUserConfig.userDefinedHeaders`, which is the only surface Studio
+    projects into User Settings.
+    """
+    for index, field in enumerate(manifest.get("env") or []):
+        label = f"env[{index}]"
+        if not isinstance(field, dict):
+            fail(f"{label} must be a mapping")
+            continue
+        key = field.get("key")
+        if not isinstance(key, str) or not key.strip():
+            fail(f"{label}.key must be a non-empty string")
+            continue
+        # Obot's catalog path reads only credEnv[key] for a non-system server, so
+        # a static value is silently dropped and a required field lands unset.
+        if field.get("value"):
+            fail(f"env[{key}].value must be absent: Obot ignores it on a catalog entry")
+
+    headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
+    if not isinstance(headers, list) or not headers:
+        fail(
+            "multiUserConfig.userDefinedHeaders must be a non-empty list: "
+            "the per-user credential has no other configuration surface"
+        )
+        return
+
+    for index, header in enumerate(headers):
+        label = f"userDefinedHeaders[{index}]"
+        if not isinstance(header, dict):
+            fail(f"{label} must be a mapping")
+            continue
+        key = header.get("key")
+        if not isinstance(key, str) or not key.strip():
+            fail(f"{label}.key must be a non-empty string")
+            continue
+        label = f"userDefinedHeaders[{key}]"
+        # Studio drops any header carrying its own value, so the user is never
+        # asked for it and the server receives nothing.
+        if header.get("value") or "secretBinding" in header:
+            fail(f"{label} must not set value or secretBinding: Studio drops such a field")
+
+    if not any(isinstance(h, dict) and h.get("required") is True for h in headers):
+        fail("at least one userDefinedHeaders entry must be required")
+
+
+def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
+    if expected["runtime"] == "remote":
+        check_remote_user_scoped_auth(manifest, fail)
+    else:
+        check_containerized_auth(manifest, fail)
+
+
+def check_containerized_readiness(manifest: dict, fail) -> None:
+    """Obot's readiness probe must reach an anonymous endpoint.
+
+    With no healthzPath, Obot POSTs an MCP `initialize` body to the container
+    path and requires a 200. A server that authenticates its MCP endpoint
+    answers 401 there, so the deployment never becomes ready.
+    """
+    healthz = (manifest.get("containerizedConfig") or {}).get("healthzPath")
+    if not isinstance(healthz, str) or not healthz.strip():
+        fail(
+            "containerizedConfig.healthzPath must be a non-empty string: "
+            "Obot's fallback readiness probe hits the authenticated MCP path"
+        )
 
 
 def check_tool_preview(manifest: dict, fail) -> None:
@@ -134,6 +224,11 @@ def validate(root: Path) -> list[str]:
         def fail(message: str, path=path) -> None:
             errors.append(f"{path.name}: {message}")
 
+        runtime = expected.get("runtime")
+        if runtime not in RUNTIME_CONFIG_KEYS:
+            fail(f"curated entry pins unsupported runtime {runtime!r}")
+            continue
+
         if not path.is_file():
             fail("curated entry is missing from the catalog")
             continue
@@ -150,7 +245,9 @@ def validate(root: Path) -> list[str]:
 
         check_required_strings(manifest, fail)
         check_pinned_values(manifest, expected, fail)
-        check_user_scoped_auth(manifest, fail)
+        check_authorization(manifest, expected, fail)
+        if runtime == "containerized":
+            check_containerized_readiness(manifest, fail)
         check_tool_preview(manifest, fail)
 
     return errors
