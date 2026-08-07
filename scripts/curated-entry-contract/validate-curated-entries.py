@@ -41,6 +41,17 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             "path": "/",
             "healthzPath": "/health",
         },
+        "envKeys": (
+            # No command-line flag sets the listen address. Without this key the
+            # server binds the container's loopback on port 5000, nothing outside
+            # the container can reach it, and readiness never passes.
+            "ASPNETCORE_URLS",
+            "AzureAd__TenantId",
+            "AzureAd__ClientId",
+            "AzureAd__Instance",
+            "AzureAd__ClientCredentials__0__SourceType",
+            "AzureAd__ClientCredentials__0__ClientSecret",
+        ),
     },
 }
 
@@ -84,12 +95,30 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
         fail(f"{config_key} must be a mapping")
         return
 
-    for field, want in (expected[config_key] or {}).items():  # type: ignore[union-attr]
+    for field, want in (expected.get(config_key) or {}).items():  # type: ignore[union-attr]
         got = config.get(field)
         # `is not` for booleans so that 1 does not satisfy True.
         mismatch = got is not want if isinstance(want, bool) else got != want
         if mismatch:
             fail(f"{config_key}.{field} is {got!r}, expected {want!r}")
+
+
+def check_pinned_env_keys(manifest: dict, expected: dict[str, object], fail) -> None:
+    """An entry whose image needs a fixed env value pins the whole key list.
+
+    Obot builds a containerized server's environment solely from the operator's
+    answers to `env` — ContainerizedRuntimeConfig carries no env field — so an
+    image that requires a non-secret variable with no command-line equivalent
+    depends on that key staying declared. Dropping one leaves every other check
+    green while the deployment can no longer start.
+    """
+    want = expected.get("envKeys")
+    if want is None:
+        return
+
+    got = [field.get("key") for field in manifest.get("env") or [] if isinstance(field, dict)]
+    if got != list(want):  # type: ignore[arg-type]
+        fail(f"env keys are {got!r}, expected {list(want)!r}")  # type: ignore[arg-type]
 
 
 def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
@@ -245,6 +274,7 @@ def validate(root: Path) -> list[str]:
 
         check_required_strings(manifest, fail)
         check_pinned_values(manifest, expected, fail)
+        check_pinned_env_keys(manifest, expected, fail)
         check_authorization(manifest, expected, fail)
         if runtime == "containerized":
             check_containerized_readiness(manifest, fail)
