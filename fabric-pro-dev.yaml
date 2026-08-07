@@ -23,7 +23,7 @@ description: |
 
   This server authenticates each user individually, so it needs setup in two places.
 
-  Your administrator registers one Microsoft Entra application for this server and fills in its tenant ID, client ID, instance, and client secret when adding the connector. That registration must expose the `Mcp.Tools.ReadWrite` delegated scope and hold delegated Microsoft Fabric permissions, so the server can exchange each user's token for a Fabric token on their behalf.
+  Your administrator registers one Microsoft Entra application for this server and fills in its tenant ID, client ID, instance, and client secret when adding the connector, alongside the fixed listen address the image needs. That registration must expose the `Mcp.Tools.ReadWrite` delegated scope and hold delegated Microsoft Fabric permissions, so the server can exchange each user's token for a Fabric token on their behalf.
 
   You then supply your own access token for that application in User Settings. The server calls Fabric as you, under your existing Fabric permissions, and Fabric records every call in its audit logs. Tokens are short-lived, so you will need to refresh yours when it expires.
 
@@ -41,7 +41,14 @@ containerizedConfig:
     - http
     - --mode
     - all
+    - --outgoing-auth-strategy
+    - UseOnBehalfOf
 env:
+  - key: ASPNETCORE_URLS
+    name: Server Listen Address
+    required: true
+    sensitive: false
+    description: The address the server binds inside its container. Enter http://0.0.0.0:8080 exactly. The server otherwise binds the container's loopback interface on port 5000, which nothing outside the container can reach, and the deployment never becomes ready. There is no command-line flag for this.
   - key: AzureAd__TenantId
     name: Microsoft Entra Tenant ID
     required: true
