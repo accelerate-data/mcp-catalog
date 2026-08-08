@@ -98,7 +98,10 @@ jobs:
       fail-fast: false
       matrix:
         server: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    runs-on: depot-ubuntu-22.04
+    # Accelerate Data addition: upstream runs this on a Depot pool that this
+    # fork has no access to, so the job is created and then queues until it
+    # expires roughly a day later. GitHub-hosted runners are what we have.
+    runs-on: ubuntu-latest
     steps:
       - name: Remove file extension
         env:

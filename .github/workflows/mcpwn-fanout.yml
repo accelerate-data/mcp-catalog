@@ -1,6 +1,21 @@
 name: Mcpwn Fan-out (dispatch one run per YAML)
 run-name: ${{ inputs.workflow_name || 'Mcpwn Scan' }} - Fan-out
-on: []
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_name:
+        description: "Custom workflow name (optional)"
+        required: false
+        type: string
+        default: "Mcpwn Scan"
+  # Accelerate Data addition: the pull-request scan only covers entries a pull
+  # request changes, so an entry is scanned once and never again. Upstream
+  # leaves this whole-catalog fan-out to be triggered by hand, which means in
+  # practice it never runs. A weekly schedule gives every scannable entry
+  # standing coverage. Cadence is deliberately slow: the fan-out starts one
+  # workflow run per entry, so a faster schedule would bury the run history.
+  schedule:
+    - cron: "0 3 * * 1"
 
 permissions:
   contents: read
@@ -19,6 +34,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Accelerate Data addition: entries the scan cannot produce a result
+          # for are declared in this file and dropped from the target list
+          # below, on the same recorded grounds the pull-request scan uses. See
+          # .github/mcpwn-scan-coverage.yaml for the reason and the review that
+          # replaces the scan for each one.
+          scan_coverage_file=".github/mcpwn-scan-coverage.yaml"
+
           all_files=$(find . -name "*.yaml" -type f | jq -R -s -c 'split("\n") | map(select(length > 0))')
           file_configs="[]"
 
@@ -32,6 +54,18 @@ jobs:
                 containerized_config=$(yq eval '.containerizedConfig' "$file" -o=json -I=0)
 
                 if [ "$containerized_config" != "null" ]; then
+                  # Accelerate Data addition: skip an entry declared unscannable.
+                  scan_coverage=""
+                  if [ -f "$scan_coverage_file" ]; then
+                    scan_coverage=$(FILE="$file" yq eval \
+                      '.entries[] | select(.file == strenv(FILE)) | .scan // ""' \
+                      "$scan_coverage_file")
+                  fi
+                  if [ "$scan_coverage" == "manual" ]; then
+                    echo "::notice file=$file::mcpwn scan skipped: $file is declared manually reviewed in $scan_coverage_file"
+                    continue
+                  fi
+
                   env_config=$(yq eval '.env' "$file" -o=json -I=0)
 
                   entry=$(jq -n \
