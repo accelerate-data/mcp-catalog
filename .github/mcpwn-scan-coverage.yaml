@@ -1,0 +1,66 @@
+# Which curated catalog entries the automated mcpwn scan can cover.
+#
+# Accelerate Data addition. Two consumers read this file:
+#
+#   .github/workflows/mcpwn.yml
+#       drops an entry marked `manual` from the scan matrix, so a pull request
+#       adding it does not produce a check that cannot finish.
+#   scripts/curated-entry-contract/validate-scan-coverage.py
+#       requires every curated entry to appear here, and renders the result
+#       into the Curated Entry Contract job summary so a reviewer sees the
+#       coverage without opening a workflow file.
+#
+# An entry absent from this file is scanned normally. Only curated
+# (first-party) entries are listed; catalog inventory inherited from upstream
+# keeps upstream's behaviour unchanged.
+#
+#   scan: automated   the scan is expected to produce a result, and that
+#                     result gates the pull request.
+#   scan: manual      the scan cannot produce a result for this entry.
+#                     `reason` says why; `alternative` records the review
+#                     performed in its place. Both are required.
+#
+# Marking an entry `manual` removes automated coverage. It is not a way to get
+# an entry merged faster — the alternative review is the merge gate instead,
+# and the contract check fails if it is missing.
+
+version: 1
+
+entries:
+  - file: fabric-core.yaml
+    scan: manual
+    reason: >-
+      Remote runtime. The scan starts a container image and probes it over
+      localhost, so it never applies to an entry that points at a
+      vendor-operated endpoint: the matrix step only emits entries declaring
+      containerizedConfig. Pointing a security fuzzer at Microsoft's hosted
+      Fabric API would also be unauthorized testing of a third party's service.
+    alternative: >-
+      The curated entry contract pins remoteConfig.fixedURL and
+      staticOAuthRequired, and fails the build if the entry grows an `env`
+      block or a remoteConfig header — so no deployment-wide credential can
+      reach the vendor endpoint and authorization stays user-scoped OAuth.
+      There is no first-party attack surface here: the entry contributes a URL
+      and an auth contract, not a running server.
+
+  - file: fabric-pro-dev.yaml
+    scan: manual
+    reason: >-
+      The container authenticates its MCP path. mcpwn discovers an entry's
+      tools by calling that path anonymously and has no auth channel at all
+      (no credential flag, no Authorization handling in its transport), so
+      discovery is refused with 401, the run aborts before writing a report,
+      and no configuration makes it complete. Supplying a real Entra client
+      secret to get past it would aim a fuzzer at a live vendor API under a
+      production app registration, which is not acceptable.
+    alternative: >-
+      Manual probe, 2026-08-07, against the pinned image
+      mcr.microsoft.com/fabric/fabric-mcp:1.2.0 started with the entry's
+      declared configuration: GET /health returned 200 anonymously, POST /
+      returned 401 without a bearer token, and mcpwn against the same
+      container reported "Found 0 tools, 0 resources" and exited non-zero —
+      confirming both the readiness contract and that the endpoint is not
+      anonymously reachable. The image is a vendor-published tag pinned by the
+      curated entry contract so it cannot drift silently; the contract also
+      forbids a static value on any env key and requires the per-user
+      credential to arrive through multiUserConfig.userDefinedHeaders.

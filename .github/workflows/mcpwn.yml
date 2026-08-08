@@ -37,6 +37,13 @@ jobs:
       - name: Extract config from changed files
         id: extract-config
         run: |
+          # Accelerate Data addition: curated entries the scan cannot produce a
+          # result for are declared in this file and dropped from the matrix
+          # below, so they do not leave a check that never finishes. See
+          # .github/mcpwn-scan-coverage.yaml for the reason and the review that
+          # replaces the scan for each one.
+          scan_coverage_file=".github/mcpwn-scan-coverage.yaml"
+
           changed_files='${{ steps.changed-files.outputs.all_changed_files }}'
 
           if [ "$changed_files" == "[]" ] || [ -z "$changed_files" ]; then
@@ -53,6 +60,18 @@ jobs:
 
               # Only include files that have containerizedConfig (not null)
               if [ "$containerized_config" != "null" ]; then
+                # Accelerate Data addition: skip an entry declared unscannable.
+                scan_coverage=""
+                if [ -f "$scan_coverage_file" ]; then
+                  scan_coverage=$(FILE="$file" yq eval \
+                    '.entries[] | select(.file == strenv(FILE)) | .scan // ""' \
+                    "$scan_coverage_file")
+                fi
+                if [ "$scan_coverage" == "manual" ]; then
+                  echo "::notice file=$file::mcpwn scan skipped: $file is declared manually reviewed in $scan_coverage_file"
+                  continue
+                fi
+
                 env_config=$(yq eval '.env' "$file" -o=json -I=0)
 
                 # Create entry for this file
@@ -73,6 +92,11 @@ jobs:
 
   mcpwn-scan:
     needs: generate-matrix
+    # Accelerate Data addition: an empty matrix marks the workflow run failed
+    # even though no job ran and every check on the pull request is green.
+    # Skipping the job explicitly keeps the run green when a pull request
+    # changes no scannable containerized entry.
+    if: needs.generate-matrix.outputs.matrix != '' && needs.generate-matrix.outputs.matrix != '[]'
     strategy:
       fail-fast: false
       matrix:
