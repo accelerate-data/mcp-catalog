@@ -57,6 +57,9 @@ def load_declarations(path: Path, fail) -> dict[str, dict[str, object]]:
         fail(f"{path}: must be a mapping")
         return {}
 
+    if document.get("version") != 1:
+        fail(f"{path}: version must be 1")
+
     entries = document.get("entries")
     if not isinstance(entries, list) or not entries:
         fail(f"{path}: entries must be a non-empty list")
@@ -95,7 +98,7 @@ def load_declarations(path: Path, fail) -> dict[str, dict[str, object]]:
 
 
 def check_coverage(root: Path, declarations: dict[str, dict[str, object]], fail) -> None:
-    """Every curated entry declares its coverage, and every declaration is real."""
+    """The declarations match the curated entry set exactly."""
     for filename in sorted(CURATED_ENTRIES):
         if filename not in declarations:
             fail(
@@ -104,7 +107,12 @@ def check_coverage(root: Path, declarations: dict[str, dict[str, object]], fail)
             )
 
     for filename in sorted(declarations):
-        if not (root / filename).is_file():
+        if filename not in CURATED_ENTRIES:
+            fail(
+                f"{COVERAGE_FILE}: {filename} is not a curated entry; "
+                "only curated entries may declare scan coverage"
+            )
+        elif not (root / filename).is_file():
             fail(f"{COVERAGE_FILE}: {filename} is declared but missing from the catalog")
 
 

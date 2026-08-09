@@ -1,14 +1,13 @@
 name: Scan with Mcpwn
 permissions:
-  id-token: write
   contents: read
   packages: read
-  actions: read
-  pull-requests: write
 
 on:
-  workflow_dispatch:
-  pull_request_target:
+  # Accelerate Data addition: this workflow checks out and executes content
+  # from the pull request, so it must run with the unprivileged PR token and
+  # without repository secrets.
+  pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -20,8 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Get changed files
@@ -106,13 +103,6 @@ jobs:
     # expires roughly a day later. GitHub-hosted runners are what we have.
     runs-on: ubuntu-latest
     steps:
-      - name: Remove file extension
-        env:
-          MATRIX_SERVER_FILE: ${{ matrix.server.file }}
-        run: |
-          MCP_SERVER_NAME="${MATRIX_SERVER_FILE/.yaml/}"
-          echo "MCP_SERVER_NAME=$MCP_SERVER_NAME" >> $GITHUB_ENV
-
       - name: Checkout mcpwn
         uses: actions/checkout@v6
         with:
@@ -132,33 +122,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Convert env to docker args
-        run: |
-          ENV_JSON='${{ toJson(matrix.server.env) }}'
-          if [ "$ENV_JSON" != "null" ] && [ -n "$ENV_JSON" ]; then
-            DOCKER_ENV_ARGS=$(echo "$ENV_JSON" | jq -r 'map("-e " + .key) | join(" ")')
-            echo "DOCKER_ENV_ARGS=$DOCKER_ENV_ARGS" >> $GITHUB_ENV
-          else
-            echo "DOCKER_ENV_ARGS=" >> $GITHUB_ENV
-          fi
-
-      - name: Convert args to string
-        run: |
-          ARGS_JSON='${{ toJson(matrix.server.containerizedConfig.args) }}'
-          if [ "$ARGS_JSON" != "null" ] && [ -n "$ARGS_JSON" ]; then
-            ARGS_STRING=$(echo "$ARGS_JSON" | jq -r 'join(" ")')
-            echo "ARGS_STRING=$ARGS_STRING" >> $GITHUB_ENV
-          else
-            echo "ARGS_STRING=" >> $GITHUB_ENV
-          fi
-
       - name: Start mcp server
-        env: ${{ secrets }}
+        env:
+          ARGS_JSON: ${{ toJson(matrix.server.containerizedConfig.args) }}
+          ENV_JSON: ${{ toJson(matrix.server.env) }}
+          IMAGE: ${{ matrix.server.containerizedConfig.image }}
+          PORT: ${{ matrix.server.containerizedConfig.port }}
         run: |
-          docker run -d --name ${MCP_SERVER_NAME} \
-            -p 8080:${{ matrix.server.containerizedConfig.port }} \
-            ${DOCKER_ENV_ARGS} \
-            ${{ matrix.server.containerizedConfig.image }} ${ARGS_STRING}
+          if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+            echo "Invalid container port: $PORT" >&2
+            exit 1
+          fi
+          if [[ -z "$IMAGE" ]]; then
+            echo "Container image must not be empty" >&2
+            exit 1
+          fi
+
+          docker_args=(run -d --name mcpwn-target -p "8080:$PORT")
+          while IFS= read -r key; do
+            if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+              echo "Invalid environment variable name: $key" >&2
+              exit 1
+            fi
+            docker_args+=(-e "$key")
+          done < <(jq -r '.[]?.key' <<< "$ENV_JSON")
+
+          server_args=()
+          while IFS= read -r arg; do
+            server_args+=("$arg")
+          done < <(jq -r '.[]?' <<< "$ARGS_JSON")
+
+          docker "${docker_args[@]}" "$IMAGE" "${server_args[@]}"
 
       - name: Run mcpwn scan
         run: |
@@ -173,17 +167,11 @@ jobs:
         run: |
           python3 mcp-catalog/.github/scripts/sarif_to_md.py mcpwn-results.sarif > sarif_comment.md
 
-      - name: Find existing SARIF comment
-        id: find
-        uses: peter-evans/find-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-includes: "<!-- sarif-comment-marker -->"
+      - name: Publish scan summary
+        run: cat sarif_comment.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create or update SARIF comment
-        uses: peter-evans/create-or-update-comment@v5
+      - name: Upload scan report
+        uses: actions/upload-artifact@v6
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-id: ${{ steps.find.outputs.comment-id }}
-          body-path: sarif_comment.md
-          edit-mode: replace
+          name: mcpwn-results-${{ matrix.server.file }}
+          path: mcpwn-results.sarif

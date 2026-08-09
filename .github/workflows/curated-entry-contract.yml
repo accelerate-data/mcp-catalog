@@ -28,6 +28,12 @@ jobs:
       - name: Validate curated catalog entries
         run: python scripts/curated-entry-contract/validate-curated-entries.py
 
+      - name: Test curated catalog contracts
+        run: >-
+          python -m unittest discover
+          -s scripts/curated-entry-contract/__tests__
+          -p 'test_*.py' -v
+
       # Publishes the coverage table to the job summary, so a reviewer sees
       # which curated entries the mcpwn scan covers without opening a workflow.
       - name: Validate automated scan coverage
