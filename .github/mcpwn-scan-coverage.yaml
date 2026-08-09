@@ -10,12 +10,11 @@
 #       into the Curated Entry Contract job summary so a reviewer sees the
 #       coverage without opening a workflow file.
 #
-# An entry absent from this file is scanned normally. Only curated
-# (first-party) entries are listed; catalog inventory inherited from upstream
-# keeps upstream's behaviour unchanged.
+# Every curated (first-party) entry is listed. Catalog inventory inherited from
+# upstream is absent and keeps upstream's automated-scan behaviour unchanged.
 #
-#   scan: automated   the scan is expected to produce a result, and that
-#                     result gates the pull request.
+#   scan: automated   the scan is expected to produce a result, `reason`
+#                     explains why, and that result gates the pull request.
 #   scan: manual      the scan cannot produce a result for this entry.
 #                     `reason` says why; `alternative` records the review
 #                     performed in its place. Both are required.

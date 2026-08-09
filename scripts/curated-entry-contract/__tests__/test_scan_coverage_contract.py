@@ -24,26 +24,27 @@ class ScanCoverageContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "coverage.yaml"
             for version in (True, 1.0, "1", 2, None):
-                path.write_text(
-                    yaml.safe_dump(
-                        {
-                            "version": version,
-                            "entries": [
-                                {
-                                    "file": "fabric-core.yaml",
-                                    "scan": "manual",
-                                    "reason": "remote runtime",
-                                    "alternative": "contract review",
-                                }
-                            ],
-                        }
+                with self.subTest(version=version):
+                    path.write_text(
+                        yaml.safe_dump(
+                            {
+                                "version": version,
+                                "entries": [
+                                    {
+                                        "file": "fabric-core.yaml",
+                                        "scan": "manual",
+                                        "reason": "remote runtime",
+                                        "alternative": "contract review",
+                                    }
+                                ],
+                            }
+                        )
                     )
-                )
-                errors: list[str] = []
+                    errors: list[str] = []
 
-                scan_coverage.load_declarations(path, errors.append)
+                    scan_coverage.load_declarations(path, errors.append)
 
-                self.assertIn(f"{path}: version must be 1", errors)
+                    self.assertIn(f"{path}: version must be 1", errors)
 
     def test_rejects_declaration_for_non_curated_catalog_entry(self) -> None:
         errors: list[str] = []
