@@ -41,3 +41,25 @@ entries:
       reach the vendor endpoint and authorization stays user-scoped OAuth.
       There is no first-party attack surface here: the entry contributes a URL
       and an auth contract, not a running server.
+
+  - file: fabric-pro-dev.yaml
+    scan: manual
+    reason: >-
+      The container authenticates its MCP path. mcpwn discovers an entry's
+      tools by calling that path anonymously and has no auth channel at all
+      (no credential flag, no Authorization handling in its transport), so
+      discovery is refused with 401, the run aborts before writing a report,
+      and no configuration makes it complete. Supplying a real Entra client
+      secret to get past it would aim a fuzzer at a live vendor API under a
+      production app registration, which is not acceptable.
+    alternative: >-
+      Manual probe, 2026-08-07, against the pinned image
+      mcr.microsoft.com/fabric/fabric-mcp:1.2.0 started with the entry's
+      declared configuration: GET /health returned 200 anonymously, POST /
+      returned 401 without a bearer token, and mcpwn against the same
+      container reported "Found 0 tools, 0 resources" and exited non-zero —
+      confirming both the readiness contract and that the endpoint is not
+      anonymously reachable. The image is a vendor-published tag pinned by the
+      curated entry contract so it cannot drift silently; the contract also
+      forbids a static value on any env key and requires the per-user
+      credential to arrive through multiUserConfig.userDefinedHeaders.

@@ -1,0 +1,441 @@
+name: Fabric Pro-Dev
+entryKey: obot-fabric-pro-dev
+serverUserType: multiUser
+shortDescription: Build on Microsoft Fabric with API specs, item schemas, OneLake data operations, and Data Factory pipelines
+description: |
+
+  Fabric Pro-Dev MCP Server is Microsoft's official Model Context Protocol server for professional Fabric development. It is self-hosted from Microsoft's published container image, so it runs inside your own deployment rather than as a shared multi-tenant service, and every Fabric call it makes runs under the signed-in user's own Microsoft Entra identity and Fabric RBAC permissions.
+
+  Where Fabric Core covers workspace and item administration, Pro-Dev covers the developer inner loop: the API and schema knowledge needed to generate correct Fabric code, plus direct OneLake and Data Factory operations.
+
+  ## Features
+  - **API documentation**: retrieve the OpenAPI specifications for Fabric workloads and the Fabric platform, list supported workload types, and pull worked request/response examples
+  - **Item definition schemas**: get the JSON schema for any Fabric item type, such as lakehouses, notebooks, semantic models, and data pipelines
+  - **Best practices**: embedded guidance on pagination, throttling, retry and backoff, long-running operations, and authentication
+  - **OneLake data operations**: browse workspaces and items, list and traverse directories, upload, download, and delete files, and inspect table namespaces and table configuration
+  - **OneLake shortcuts**: create shortcuts to OneLake, ADLS Gen2, Azure Blob, Amazon S3, S3-compatible storage, Google Cloud Storage, Dataverse, and OneDrive/SharePoint, then read, delete, or reset their cache
+  - **OneLake security**: list, read, create, update, and delete data access roles
+  - **OneLake settings**: read workspace settings and modify diagnostics and immutability policies
+  - **Data Factory**: list, create, read, and run pipelines, list and create Dataflow Gen2 dataflows, and execute M queries
+  - **Core operations**: search the OneLake catalog across workspaces and create Fabric items
+
+  ## What you'll need to connect
+
+  This server authenticates each user individually, so it needs setup in two places.
+
+  Your administrator registers one Microsoft Entra application for this server and fills in its tenant ID, client ID, instance, and client secret when adding the connector, alongside the fixed listen address the image needs. That registration must expose the `Mcp.Tools.ReadWrite` delegated scope and hold delegated Microsoft Fabric permissions, so the server can exchange each user's token for a Fabric token on their behalf.
+
+  You then supply your own access token for that application in User Settings. The server calls Fabric as you, under your existing Fabric permissions, and Fabric records every call in its audit logs. Tokens are short-lived, so you will need to refresh yours when it expires.
+
+  ## License
+
+  Microsoft publishes this server under the [MIT License](https://github.com/microsoft/mcp/blob/main/LICENSE). The pinned image `mcr.microsoft.com/fabric/fabric-mcp:1.2.0` is built from that repository.
+runtime: containerized
+containerizedConfig:
+  image: mcr.microsoft.com/fabric/fabric-mcp:1.2.0
+  port: 8080
+  path: "/"
+  healthzPath: "/health"
+  args:
+    - --transport
+    - http
+    - --mode
+    - all
+    - --outgoing-auth-strategy
+    - UseOnBehalfOf
+env:
+  - key: ASPNETCORE_URLS
+    name: Server Listen Address
+    required: true
+    sensitive: false
+    description: The address the server binds inside its container. Enter http://0.0.0.0:8080 exactly. The server otherwise binds the container's loopback interface on port 5000, which nothing outside the container can reach, and the deployment never becomes ready. There is no command-line flag for this.
+  - key: AzureAd__TenantId
+    name: Microsoft Entra Tenant ID
+    required: true
+    sensitive: false
+    description: The directory (tenant) ID of the Microsoft Entra tenant that owns both the app registration and the Fabric tenant.
+  - key: AzureAd__ClientId
+    name: Microsoft Entra Application (Client) ID
+    required: true
+    sensitive: false
+    description: The application (client) ID of the Entra app registration for this server. It must expose the Mcp.Tools.ReadWrite delegated scope and hold delegated Microsoft Fabric permissions.
+  - key: AzureAd__Instance
+    name: Microsoft Entra Instance
+    required: true
+    sensitive: false
+    description: The Entra authority the server validates tokens against. Enter https://login.microsoftonline.com/ for the public cloud, or your sovereign cloud authority.
+  - key: AzureAd__ClientCredentials__0__SourceType
+    name: Client Credential Source Type
+    required: true
+    sensitive: false
+    description: Selects which kind of client credential the server uses for the on-behalf-of token exchange. Enter ClientSecret.
+  - key: AzureAd__ClientCredentials__0__ClientSecret
+    name: Microsoft Entra Client Secret
+    required: true
+    sensitive: true
+    description: A client secret from the same app registration. The server needs it to exchange each user's token for a Fabric token on their behalf.
+multiUserConfig:
+  userDefinedHeaders:
+    - key: Authorization
+      name: Fabric Access Token
+      required: true
+      sensitive: true
+      prefix: "Bearer "
+      description: Your own Microsoft Entra access token for this server's app registration, requested with the Mcp.Tools.ReadWrite scope. Every Fabric call runs under your identity and your Fabric permissions.
+
+toolPreview:
+  - name: core_create-item
+    description: Creates a new item in a Fabric workspace. Use this when the user wants to create a Lakehouse, Notebook, or other Fabric item type. Requires workspace ID, item name, and item type.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      display-name: The display name for the item.
+      item-type: The type of the Fabric item (e.g., Lakehouse, Notebook, etc.).
+      description: The description for the item.
+  - name: core_search-catalog
+    description: Searches the Microsoft Fabric OneLake catalog for items matching the specified criteria. Supports cross-workspace search over catalog metadata and returns results filtered to entries the calling principal is authorized to access. Use this when the user wants to discover or find Fabric items (Lakehouse, Report, Notebook, and other item types) across workspaces by name, description, or workspace name. Optionally filter by item type.
+    params:
+      search: The text query for the search. Supports searching across display name, description and workspace name of the catalog entry.
+      filter: 'The filter for the search. Supports filtering by type of entries. Supported operators: eq (Equals), ne (Not Equals), or (Logical OR), () (Parentheses for grouping). Example: "Type eq ''Report'' or Type eq ''Lakehouse''". Supported item types include Report, Lakehouse, Notebook, Warehouse, SemanticModel, KQLDatabase, and DataPipeline; for the full list see the Catalog Search API reference at https://learn.microsoft.com/rest/api/fabric/core/catalog/search.'
+      page-size: The page size that needs to be returned. Must be between 1 and 1000.
+      continuation-token: A token for retrieving the next page of results.
+  - name: datafactory_list-pipelines
+    description: Lists all pipelines in a specified Microsoft Fabric workspace. Requires the workspace ID.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+  - name: datafactory_create-pipeline
+    description: Creates a new pipeline in a Microsoft Fabric workspace. Requires workspace ID and display name. Optionally provide a description.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      display-name: The display name for the item.
+      description: Optional description for the item.
+  - name: datafactory_get-pipeline
+    description: Gets details of a specific pipeline in a Microsoft Fabric workspace. Requires workspace ID and pipeline ID.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      pipeline-id: The ID of the pipeline.
+  - name: datafactory_run-pipeline
+    description: Triggers a run of a specified pipeline in a Microsoft Fabric workspace. Requires workspace ID and pipeline ID. Returns the run instance ID.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      pipeline-id: The ID of the pipeline.
+  - name: datafactory_list-dataflows
+    description: Lists all dataflows in a specified Microsoft Fabric workspace.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+  - name: datafactory_create-dataflow
+    description: Creates a new dataflow in a specified Microsoft Fabric workspace.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      display-name: The display name for the item.
+      description: Optional description for the item.
+  - name: datafactory_execute-query
+    description: Executes an M (Power Query) expression against a dataflow in a Microsoft Fabric workspace.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      dataflow-id: The ID of the dataflow.
+      query-name: The name of the query to execute.
+      query: The M (Power Query) expression to execute.
+  - name: docs_workloads
+    description: Lists Fabric workload types that have public API specifications available. Use this when the user needs to discover what APIs exist for Fabric workloads. Returns workload names like notebook, report, or platform.
+  - name: docs_workload-api-spec
+    description: Retrieves the complete OpenAPI specification for a specific Fabric workload. Use this when the user needs detailed API documentation for a workload like notebooks or reports. Returns full API spec in JSON format.
+    params:
+      workload-type: The type of Microsoft Fabric workload.
+  - name: docs_platform-api-spec
+    description: Retrieves the OpenAPI specification for core Fabric platform APIs. Use this when the user needs documentation for cross-workload platform APIs like workspace management. Returns complete platform API specification.
+  - name: docs_item-definitions
+    description: Retrieves JSON schema definitions for items in a Fabric workload API. Use this when the user needs to understand item structure or validate item definitions. Returns schema definitions for the specified workload.
+    params:
+      workload-type: The type of Microsoft Fabric workload.
+  - name: docs_best-practices
+    description: Retrieves embedded best practice documentation for a specific Fabric topic. Use this when the user needs guidance, recommendations, or implementation patterns for Fabric features. Returns detailed best practice content.
+    params:
+      topic: The best practice topic to retrieve documentation for.
+  - name: docs_api-examples
+    description: Retrieves example API request and response files for a Fabric workload. Use this when the user needs sample API calls or implementation examples. Returns dictionary of example files with their contents.
+    params:
+      workload-type: The type of Microsoft Fabric workload.
+  - name: onelake_list_workspaces
+    description: Lists all Fabric workspaces accessible via OneLake data plane API. Use this when the user needs to view available workspaces or select a workspace for data operations. Returns workspace names and IDs.
+    params:
+      continuation-token: Token for retrieving the next page of results.
+      format: 'Output format for OneLake API responses. Use ''json'' for parsed objects, ''xml'' for raw XML API response, or ''raw'' for unprocessed API response. Supported values: ''json'' (default), ''xml'', ''raw''.'
+  - name: onelake_list_items
+    description: Lists OneLake items in a Fabric workspace using the high-level OneLake API. Use this when the user needs to see what items exist in a workspace. Returns item names, types, and metadata.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      continuation-token: Token for retrieving the next page of results.
+  - name: onelake_list_items_dfs
+    description: List OneLake items in a workspace using the OneLake DFS (Data Lake File System) data API.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      recursive: Whether to perform the operation recursively.
+      continuation-token: Token for retrieving the next page of results.
+  - name: onelake_list_files
+    description: List files and directories in OneLake storage using a filesystem-style hierarchical view, similar to Azure Data Lake Storage Gen2. Shows directory structure with paths, sizes, timestamps, and metadata. Use this to explore OneLake content in a filesystem format rather than flat blob listing. Supports optional path filtering and recursive directory traversal. If no path is specified, intelligently discovers content by searching both Files and Tables folders automatically, providing comprehensive visibility across all top-level OneLake folders. Use --format=raw to get the unprocessed OneLake DFS API response for debugging and analysis.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      path: The path to list in OneLake storage (optional, defaults to root).
+      recursive: Whether to perform the operation recursively.
+      format: 'Output format for OneLake API responses. Use ''json'' for parsed objects, ''xml'' for raw XML API response, or ''raw'' for unprocessed API response. Supported values: ''json'' (default), ''xml'', ''raw''.'
+  - name: onelake_download_file
+    description: Downloads a file from OneLake storage. Use this when the user needs to retrieve file content or metadata. Returns base64 content, metadata, and text when applicable.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      file-path: The path to the file in OneLake.
+      download-file-path: Local path to save the downloaded content when running locally.
+  - name: onelake_upload_file
+    description: Uploads a file to OneLake storage from inline content or local file path. Use this when the user needs to store data in OneLake. Supports overwrite control and content type specification.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      file-path: The path to the file in OneLake.
+      content: The content to write to the file.
+      local-file-path: The path to a local file to upload.
+      overwrite: Whether to overwrite existing files.
+      content-type: MIME content type to set on the uploaded file (e.g., 'application/json'). Defaults to 'application/octet-stream'.
+  - name: onelake_delete_file
+    description: Deletes a file from OneLake storage. Use this when the user wants to remove a specific file. Permanently removes the file at the specified path.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      file-path: The path to the file in OneLake.
+  - name: onelake_create_directory
+    description: Creates a directory in OneLake storage. Use this when the user needs to organize files or prepare folder structures. Can create nested directory paths.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      directory-path: The path to the directory in OneLake.
+  - name: onelake_delete_directory
+    description: Deletes a directory from OneLake storage. Use this when the user wants to remove a folder. Use recursive flag to delete non-empty directories.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      directory-path: The path to the directory in OneLake.
+      recursive: Whether to perform the operation recursively.
+  - name: onelake_get_table_config
+    description: Retrieves table API configuration for OneLake. Use this when the user needs to understand table access settings.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+  - name: onelake_list_table_namespaces
+    description: Lists table namespaces in OneLake. Use this when the user needs to discover available table namespaces.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+  - name: onelake_get_table_namespace
+    description: Retrieves metadata for a specific table namespace. Use this when the user needs details about a namespace.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      namespace: The table namespace (schema) to inspect within the OneLake table API.
+      schema: Alias for --namespace when specifying table schemas in the OneLake table API.
+  - name: onelake_list_tables
+    description: Lists tables in OneLake. Use this when the user needs to see available tables.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      namespace: The table namespace (schema) to inspect within the OneLake table API.
+      schema: Alias for --namespace when specifying table schemas in the OneLake table API.
+  - name: onelake_get_table
+    description: Retrieves table definition from OneLake. Use this when the user needs table schema or metadata.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      item: The name or ID of the Fabric item. When using friendly names, MUST include the item type suffix (e.g., 'ItemName.Lakehouse', 'ItemName.Warehouse').
+      namespace: The table namespace (schema) to inspect within the OneLake table API.
+      schema: Alias for --namespace when specifying table schemas in the OneLake table API.
+      table: The table name exposed by the OneLake table API.
+  - name: onelake_list_data_access_roles
+    description: 'List all data access roles defined on a single item (Lakehouse / Warehouse) — the role-based policies that gate Tables/Files access for that item. Scoped to one item per call; to inspect roles across multiple items, call once per item. For looking up a specific role by name, fetch the list and pick by name; there is no server-side search. Caller must be a workspace Admin or Member on the item''s workspace. Requires OneLake.Read.All. Note: Built-in roles (e.g. DefaultReader) may include fabricItemMembers with a ''sourcePath'' field formatted as ''<workspaceId>/<itemId>'' — this is NOT a OneLake file path; it identifies the workspace/item granting inherited access.'
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      continuation-token: Token for retrieving the next page of results.
+  - name: onelake_get_data_access_role
+    description: Get the full definition of a single data access role on a single item — members, permissions, decision rules. Scoped to one role on one item per call. Use after onelake_list_data_access_roles once you know which role you need on which item. Distinct from onelake_get_principal_access, which returns the effective (resolved) access for a given principal across all roles on an item. Caller must be a workspace Admin or Member on the item's workspace. Requires OneLake.Read.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      role-name: The name of the data access role.
+  - name: onelake_create_or_update_data_access_role
+    description: Upsert a single data access role on a single item. Use flat options (--name, --entra-members, --permitted-paths, --permitted-actions) for the common case of granting Read access. For advanced scenarios (multiple decision rules, column/row constraints), pass the full JSON via --role-definition instead. When flat options are provided, --role-definition is ignored. Members can be specified by Entra object ID (GUID), email address, or UPN — non-GUID values are automatically resolved via Microsoft Graph. Caller must be a workspace Admin or Member. Requires OneLake.ReadWrite.All and User.Read.All + GroupMember.Read.All for principal resolution.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      role-name: The name of the data access role.
+      entra-members: Comma-separated Entra member identifiers (object IDs, emails, or UPNs). Non-GUID values are resolved via Microsoft Graph.
+      fabric-item-members: Comma-separated Fabric item member references in format 'itemId:permission' (e.g. 'dfbe1234-...:Read').
+      permitted-paths: Comma-separated paths to grant access to (e.g. 'Files/images/*,Tables/sales'). Omit to grant access to the entire item.
+      permitted-actions: Comma-separated actions to permit. Currently only 'Read' is supported. Defaults to 'Read' if omitted.
+      role-definition: 'JSON definition of the data access role. Must include ''name'', ''members'' (with microsoftEntraMembers), and ''decisionRules''. members.microsoftEntraMembers[].objectId accepts EITHER an Entra object ID (GUID) OR an email address / UPN — non-GUID values are automatically resolved to object IDs via Microsoft Graph (tries /users first, then /groups by mail, so mail-enabled groups and DLs work too). Do NOT call Graph yourself to convert emails to GUIDs first; pass the email or UPN directly. tenantId may be omitted — it is filled in during resolution. To scope access to a specific folder, include a Path attribute in decisionRules. Omitting Path grants access to the entire item. Example with emails (preferred when you know the address, not the GUID): {"name":"ImagesReadOnly", "members":{"microsoftEntraMembers":[ {"objectId":"alice@contoso.com"}, {"objectId":"data-readers@contoso.com"}]}, "decisionRules":[{"effect":"Permit","permission":[ {"attributeName":"Action","attributeValueIncludedIn":["Read"]}, {"attributeName":"Path","attributeValueIncludedIn":["Files/images/*"]}]}]} Example with GUIDs (use when you already have the object ID): {"name":"ImagesReadOnly", "members":{"microsoftEntraMembers":[ {"objectId":"514402e2-4238-4672-b021-ff9000307b66"}]}, "decisionRules":[{"effect":"Permit","permission":[ {"attributeName":"Action","attributeValueIncludedIn":["Read"]}]}]}'
+  - name: onelake_delete_data_access_role
+    description: Delete a single data access role from a single item. Scoped to one role on one item per call. Destructive — principals that gained access only via this role lose it on this item. Does not affect roles on other items. Caller must be a workspace Admin or Member on the item's workspace. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      role-name: The name of the data access role.
+  - name: onelake_list_shortcuts
+    description: List shortcuts defined within an item, recursing through subfolders. Returns each shortcut's path and target. Requires OneLake.Read.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      parent-path: The parent path under which to list shortcuts.
+      continuation-token: Token for retrieving the next page of results.
+      include-managed: 'Include DW-managed shortcuts in the results. Default: false (managed shortcuts are hidden to avoid overwhelming output).'
+  - name: onelake_get_shortcut
+    description: Get the properties of a single shortcut (name, path, target, configuration). Requires OneLake.Read.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+  - name: onelake_delete_shortcut
+    description: Delete a single shortcut from an item. Destructive but the destination data is preserved — only the shortcut reference is removed. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+  - name: onelake_reset_shortcut_cache
+    description: Drop cached shortcut reads for a workspace, forcing the next read to re-resolve from the destination. Use sparingly — primarily for debugging stale-cache issues. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+  - name: onelake_create_shortcut_onelake
+    description: Create a shortcut pointing to another OneLake location. Specify the target workspace, item, and optional path within the target item. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-workspace-id: The workspace ID (GUID) of the target OneLake item.
+      target-item-id: The item ID (GUID) of the target OneLake item.
+      target-path: The path within the target item (e.g. 'Files/data').
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+  - name: onelake_create_shortcut_adls_gen2
+    description: Create a shortcut pointing to an Azure Data Lake Storage Gen2 location. Requires a connection ID for authentication and a target URL. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+  - name: onelake_create_shortcut_amazon_s3
+    description: Create a shortcut pointing to an Amazon S3 location. Requires a connection ID for authentication and a target URL. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+  - name: onelake_create_shortcut_azure_blob
+    description: Create a shortcut pointing to an Azure Blob Storage location. Requires a connection ID for authentication and a target URL. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+  - name: onelake_create_shortcut_gcs
+    description: Create a shortcut pointing to a Google Cloud Storage location. Requires a connection ID for authentication and a target URL. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+  - name: onelake_create_shortcut_s3_compatible
+    description: Create a shortcut pointing to an S3-compatible storage location. Requires a connection ID, target URL, and bucket name. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+      target-bucket: The bucket name for S3-compatible targets.
+  - name: onelake_create_shortcut_dataverse
+    description: Create a shortcut pointing to a Dataverse environment. Requires the environment domain, connection ID, and Delta Lake folder. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-environment-domain: The Dataverse environment domain URI (e.g. 'https://orgname.crm.dynamics.com').
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+      target-deltalake-folder: The Delta Lake folder path in Dataverse.
+      target-table-name: The Dataverse table name.
+  - name: onelake_create_shortcut_onedrive_sharepoint
+    description: Create a shortcut pointing to a OneDrive or SharePoint Online location. Requires a connection ID and target URL. Optionally updates the Fabric item sensitivity label from the source. Requires OneLake.ReadWrite.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      item-id: The ID of the Fabric item.
+      shortcut-path: The path of the shortcut within the item.
+      shortcut-name: The name of the shortcut.
+      target-location: The target storage URL (e.g. 'https://myaccount.dfs.core.windows.net/container').
+      target-subpath: The subpath within the target storage location.
+      target-connection-id: The connection ID (GUID) for authenticating to the target.
+      target-update-fabric-item-sensitivity: 'Whether to update Fabric item sensitivity from OneDrive/SharePoint. Default: false.'
+  - name: onelake_get_settings
+    description: Get the OneLake settings for a workspace — diagnostics configuration and immutability policy. Requires OneLake.Read.All.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+  - name: onelake_modify_diagnostics
+    description: Enable or disable workspace-level OneLake diagnostic logging. When enabling, specify the destination lakehouse where logs will be stored. When disabling, destination options must be omitted. This is an LRO — the server may return 202 Accepted. Requires OneLake.ReadWrite.All. Caller must be a workspace Admin on the source workspace and Contributor+ on the destination workspace.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      status: 'The status of diagnostics: Enabled or Disabled.'
+      destination-lakehouse-workspace-id: The workspace ID (GUID) of the destination lakehouse for diagnostic logs. Required when --status is Enabled.
+      destination-lakehouse-item-id: The item ID (GUID) of the destination lakehouse for diagnostic logs. Required when --status is Enabled.
+  - name: onelake_modify_immutability_policy
+    description: Modify the workspace-level OneLake immutability policy. Once enabled, immutability cannot be disabled — confirm with the user before applying. Retention days cannot be reduced below the current value. Requires OneLake.ReadWrite.All. Caller must be a workspace Admin.
+    params:
+      workspace-id: The ID of the Microsoft Fabric workspace.
+      workspace: The name or ID of the Microsoft Fabric workspace.
+      scope: The scope of the immutability policy. Currently only 'DiagnosticLogs' is supported.
+      retention-days: Number of days to retain diagnostic logs (minimum 1). Cannot be reduced below the current value.
+metadata:
+  categories: Data Engineering, Data Analytics, Developer Tools
+icon: https://avatars.githubusercontent.com/u/6154722?s=200&v=4
+repoURL: https://github.com/microsoft/mcp/tree/main/servers/Fabric.Mcp.Server
