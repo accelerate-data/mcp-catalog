@@ -1,0 +1,43 @@
+# Which curated catalog entries the automated mcpwn scan can cover.
+#
+# Accelerate Data addition. Two consumers read this file:
+#
+#   .github/workflows/mcpwn.yml
+#       drops an entry marked `manual` from the scan matrix, so a pull request
+#       adding it does not produce a check that cannot finish.
+#   scripts/curated-entry-contract/validate-scan-coverage.py
+#       requires every curated entry to appear here, and renders the result
+#       into the Curated Entry Contract job summary so a reviewer sees the
+#       coverage without opening a workflow file.
+#
+# Every curated (first-party) entry is listed. Catalog inventory inherited from
+# upstream is absent and keeps upstream's automated-scan behaviour unchanged.
+#
+#   scan: automated   the scan is expected to produce a result, `reason`
+#                     explains why, and that result gates the pull request.
+#   scan: manual      the scan cannot produce a result for this entry.
+#                     `reason` says why; `alternative` records the review
+#                     performed in its place. Both are required.
+#
+# Marking an entry `manual` removes automated coverage. It is not a way to get
+# an entry merged faster — the alternative review is the merge gate instead,
+# and the contract check fails if it is missing.
+
+version: 1
+
+entries:
+  - file: fabric-core.yaml
+    scan: manual
+    reason: >-
+      Remote runtime. The scan starts a container image and probes it over
+      localhost, so it never applies to an entry that points at a
+      vendor-operated endpoint: the matrix step only emits entries declaring
+      containerizedConfig. Pointing a security fuzzer at Microsoft's hosted
+      Fabric API would also be unauthorized testing of a third party's service.
+    alternative: >-
+      The curated entry contract pins remoteConfig.fixedURL and
+      staticOAuthRequired, and fails the build if the entry grows an `env`
+      block or a remoteConfig header — so no deployment-wide credential can
+      reach the vendor endpoint and authorization stays user-scoped OAuth.
+      There is no first-party attack surface here: the entry contributes a URL
+      and an auth contract, not a running server.
