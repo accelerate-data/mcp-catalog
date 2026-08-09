@@ -12,7 +12,10 @@ permissions:
 jobs:
   scan:
     name: ${{ inputs.workflow_name }} - ${{ inputs.file }}
-    runs-on: depot-ubuntu-22.04
+    # Accelerate Data addition: upstream runs this on a Depot pool that this
+    # fork has no access to, so every dispatched worker queues until it expires
+    # instead of scanning anything. GitHub-hosted runners are what we have.
+    runs-on: ubuntu-latest
 
     steps:
       - name: Derive MCP_SERVER_NAME
