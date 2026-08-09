@@ -57,7 +57,8 @@ def load_declarations(path: Path, fail) -> dict[str, dict[str, object]]:
         fail(f"{path}: must be a mapping")
         return {}
 
-    if document.get("version") != 1:
+    version = document.get("version")
+    if type(version) is not int or version != 1:
         fail(f"{path}: version must be 1")
 
     entries = document.get("entries")

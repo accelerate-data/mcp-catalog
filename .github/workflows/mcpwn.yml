@@ -33,6 +33,8 @@ jobs:
 
       - name: Extract config from changed files
         id: extract-config
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
           # Accelerate Data addition: curated entries the scan cannot produce a
           # result for are declared in this file and dropped from the matrix
@@ -41,7 +43,7 @@ jobs:
           # replaces the scan for each one.
           scan_coverage_file=".github/mcpwn-scan-coverage.yaml"
 
-          changed_files='${{ steps.changed-files.outputs.all_changed_files }}'
+          changed_files="$CHANGED_FILES"
 
           if [ "$changed_files" == "[]" ] || [ -z "$changed_files" ]; then
             echo "file_configs=[]" >> $GITHUB_OUTPUT
@@ -139,18 +141,18 @@ jobs:
           fi
 
           docker_args=(run -d --name mcpwn-target -p "8080:$PORT")
-          while IFS= read -r key; do
+          while IFS= read -r -d '' key; do
             if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
               echo "Invalid environment variable name: $key" >&2
               exit 1
             fi
             docker_args+=(-e "$key")
-          done < <(jq -r '.[]?.key' <<< "$ENV_JSON")
+          done < <(jq --raw-output0 '.[]?.key' <<< "$ENV_JSON")
 
           server_args=()
-          while IFS= read -r arg; do
+          while IFS= read -r -d '' arg; do
             server_args+=("$arg")
-          done < <(jq -r '.[]?' <<< "$ARGS_JSON")
+          done < <(jq --raw-output0 '.[]?' <<< "$ARGS_JSON")
 
           docker "${docker_args[@]}" "$IMAGE" "${server_args[@]}"
 
