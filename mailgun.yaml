@@ -1,0 +1,49 @@
+name: Mailgun
+entryKey: obot-mailgun
+serverUserType: multiUser
+shortDescription: Send email and inspect Mailgun delivery operations through the official MCP server
+description: |
+  The official Mailgun Model Context Protocol server exposes curated tools for
+  sending email, inspecting delivery, managing domains, and reviewing account
+  operations.
+
+  ## What you'll need
+
+  A Vibedata Owner configures a Mailgun API key for the shared deployment. Each
+  Studio User still connects the deployment separately before it is available
+  to that User's AgentSessions.
+
+metadata:
+  categories: Communication, Developer Tools
+icon: https://avatars.githubusercontent.com/u/447388?s=200&v=4
+repoURL: https://github.com/mailgun/mailgun-mcp-server
+runtime: npx
+npxConfig:
+  package: "@mailgun/mcp-server@2.1.2"
+env:
+  - key: MAILGUN_API_KEY
+    name: Mailgun API key
+    description: API key used by the shared Mailgun MCP deployment.
+    required: true
+    sensitive: true
+  - key: MAILGUN_API_REGION
+    name: Mailgun API region
+    description: Optional Mailgun API region. Use us or eu; defaults to us.
+    required: false
+    sensitive: false
+toolPreview:
+  - name: post-v3-domain-name-messages
+    description: Send an email through a configured Mailgun domain.
+    params:
+      domain: Mailgun sending domain.
+      to: Recipient email address.
+      subject: Email subject.
+      text: Plain-text email body.
+  - name: get-v3-domain-events
+    description: Inspect delivery events for a configured Mailgun domain.
+    params:
+      domain: Mailgun domain whose events should be queried.
+  - name: validate_email
+    description: Validate an email address using Mailgun validation capabilities.
+    params:
+      address: Email address to validate.
