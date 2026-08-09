@@ -63,3 +63,17 @@ entries:
       curated entry contract so it cannot drift silently; the contract also
       forbids a static value on any env key and requires the per-user
       credential to arrive through multiUserConfig.userDefinedHeaders.
+
+  - file: mailgun.yaml
+    scan: manual
+    reason: >-
+      NPX stdio runtime. The scan matrix only starts entries declaring a
+      containerizedConfig image and probes an HTTP endpoint on localhost, so
+      it cannot launch or communicate with this package through stdio.
+    alternative: >-
+      The exact package @mailgun/mcp-server@2.1.2 was initialized through real
+      Obot and its published tools were discovered through Studio's real
+      AgentSession bridge. The curated entry contract pins that package,
+      rejects runtime arguments and remote configuration, and permits only the
+      reviewed MAILGUN_API_KEY and MAILGUN_API_REGION environment fields, with
+      the API key required and sensitive.
