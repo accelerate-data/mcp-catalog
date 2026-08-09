@@ -106,8 +106,10 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
         package = npx_config.get("package")
         if package != expected["package"]:
             fail(f"npxConfig.package is {package!r}, expected {expected['package']!r}")
-        if npx_config.get("args"):
+        if "args" in npx_config:
             fail("npxConfig.args must be absent for the curated Mailgun entry")
+        if manifest.get("remoteConfig"):
+            fail("remoteConfig must be absent for the curated Mailgun entry")
         return
 
     config_key = RUNTIME_CONFIG_KEYS[str(expected["runtime"])]
@@ -258,6 +260,16 @@ def check_mailgun_deployment_config(manifest: dict, fail) -> None:
 
     if "MAILGUN_API_HOSTNAME" in fields:
         fail("MAILGUN_API_HOSTNAME must not be exposed as deployment configuration")
+
+    expected_keys = {"MAILGUN_API_KEY", "MAILGUN_API_REGION"}
+    if set(fields) != expected_keys:
+        fail(f"env keys are {sorted(fields)!r}, expected {sorted(expected_keys)!r}")
+
+    region = fields.get("MAILGUN_API_REGION")
+    if not isinstance(region, dict):
+        fail("env must declare MAILGUN_API_REGION")
+    elif region.get("required") is not False or region.get("sensitive") is not False:
+        fail("MAILGUN_API_REGION must be optional and non-sensitive")
 
 
 def check_tool_preview(manifest: dict, fail) -> None:
