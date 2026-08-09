@@ -231,7 +231,12 @@ def check_containerized_readiness(manifest: dict, fail) -> None:
 
 
 def check_mailgun_deployment_config(manifest: dict, fail) -> None:
-    user_defined_headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
+    multi_user_config = manifest.get("multiUserConfig")
+    if multi_user_config is not None and not isinstance(multi_user_config, dict):
+        fail("multiUserConfig must be a mapping when present")
+        user_defined_headers = None
+    else:
+        user_defined_headers = (multi_user_config or {}).get("userDefinedHeaders")
     if user_defined_headers:
         fail("multiUserConfig.userDefinedHeaders must be absent for an npx stdio server")
 

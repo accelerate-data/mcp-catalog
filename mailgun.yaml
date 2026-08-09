@@ -32,14 +32,14 @@ env:
     required: false
     sensitive: false
 toolPreview:
-  - name: send_message
+  - name: post-v3-domain-name-messages
     description: Send an email through a configured Mailgun domain.
     params:
       domain: Mailgun sending domain.
       to: Recipient email address.
       subject: Email subject.
       text: Plain-text email body.
-  - name: get_events
+  - name: get-v3-domain-events
     description: Inspect delivery events for a configured Mailgun domain.
     params:
       domain: Mailgun domain whose events should be queried.
