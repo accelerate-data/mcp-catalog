@@ -53,6 +53,13 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             "AzureAd__ClientCredentials__0__ClientSecret",
         ),
     },
+    "mailgun.yaml": {
+        "name": "Mailgun",
+        "entryKey": "obot-mailgun",
+        "serverUserType": "multiUser",
+        "runtime": "npx",
+        "package": "@mailgun/mcp-server@2.1.2",
+    },
 }
 
 REQUIRED_NON_EMPTY_STRINGS = (
@@ -69,6 +76,7 @@ REQUIRED_NON_EMPTY_STRINGS = (
 RUNTIME_CONFIG_KEYS = {
     "remote": "remoteConfig",
     "containerized": "containerizedConfig",
+    "npx": "npxConfig",
 }
 
 
@@ -88,6 +96,21 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
         actual = manifest.get(field)
         if actual != expected[field]:
             fail(f"{field} is {actual!r}, expected {expected[field]!r}")
+
+    if expected["runtime"] == "npx":
+        npx_config = manifest.get("npxConfig")
+        if not isinstance(npx_config, dict):
+            fail("npxConfig must be a mapping")
+            return
+
+        package = npx_config.get("package")
+        if package != expected["package"]:
+            fail(f"npxConfig.package is {package!r}, expected {expected['package']!r}")
+        if "args" in npx_config:
+            fail("npxConfig.args must be absent for the curated Mailgun entry")
+        if manifest.get("remoteConfig"):
+            fail("remoteConfig must be absent for the curated Mailgun entry")
+        return
 
     config_key = RUNTIME_CONFIG_KEYS[str(expected["runtime"])]
     config = manifest.get(config_key)
@@ -188,8 +211,10 @@ def check_containerized_auth(manifest: dict, fail) -> None:
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
     if expected["runtime"] == "remote":
         check_remote_user_scoped_auth(manifest, fail)
-    else:
+    elif expected["runtime"] == "containerized":
         check_containerized_auth(manifest, fail)
+    else:
+        check_mailgun_deployment_config(manifest, fail)
 
 
 def check_containerized_readiness(manifest: dict, fail) -> None:
@@ -205,6 +230,46 @@ def check_containerized_readiness(manifest: dict, fail) -> None:
             "containerizedConfig.healthzPath must be a non-empty string: "
             "Obot's fallback readiness probe hits the authenticated MCP path"
         )
+
+
+def check_mailgun_deployment_config(manifest: dict, fail) -> None:
+    multi_user_config = manifest.get("multiUserConfig")
+    if multi_user_config is not None and not isinstance(multi_user_config, dict):
+        fail("multiUserConfig must be a mapping when present")
+        user_defined_headers = None
+    else:
+        user_defined_headers = (multi_user_config or {}).get("userDefinedHeaders")
+    if user_defined_headers:
+        fail("multiUserConfig.userDefinedHeaders must be absent for an npx stdio server")
+
+    env = manifest.get("env")
+    if not isinstance(env, list):
+        fail("env must be a list")
+        return
+
+    fields = {
+        field.get("key"): field
+        for field in env
+        if isinstance(field, dict) and isinstance(field.get("key"), str)
+    }
+    api_key = fields.get("MAILGUN_API_KEY")
+    if not isinstance(api_key, dict):
+        fail("env must declare MAILGUN_API_KEY")
+    elif api_key.get("required") is not True or api_key.get("sensitive") is not True:
+        fail("MAILGUN_API_KEY must be required and sensitive")
+
+    if "MAILGUN_API_HOSTNAME" in fields:
+        fail("MAILGUN_API_HOSTNAME must not be exposed as deployment configuration")
+
+    expected_keys = {"MAILGUN_API_KEY", "MAILGUN_API_REGION"}
+    if set(fields) != expected_keys:
+        fail(f"env keys are {sorted(fields)!r}, expected {sorted(expected_keys)!r}")
+
+    region = fields.get("MAILGUN_API_REGION")
+    if not isinstance(region, dict):
+        fail("env must declare MAILGUN_API_REGION")
+    elif region.get("required") is not False or region.get("sensitive") is not False:
+        fail("MAILGUN_API_REGION must be optional and non-sensitive")
 
 
 def check_tool_preview(manifest: dict, fail) -> None:
