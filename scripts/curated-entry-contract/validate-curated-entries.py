@@ -183,13 +183,13 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
     Studio must keep the integration on one required deployment-owned secret,
     without adding env-based credentials, static OAuth, or per-user header prompts.
     """
-    if manifest.get("env"):
+    if "env" in manifest:
         fail(
             "env must be absent: Resend remote auth must stay on the required shared bearer header"
         )
 
-    user_defined_headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
-    if user_defined_headers:
+    multi_user_config = manifest.get("multiUserConfig")
+    if isinstance(multi_user_config, dict) and "userDefinedHeaders" in multi_user_config:
         fail(
             "multiUserConfig.userDefinedHeaders must be absent: "
             "Resend remote auth is instance-owned, not per-user"
@@ -226,6 +226,35 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
     if not isinstance(expected_header, dict):
         fail("curated entry pins invalid remoteHeaders contract")
         return
+
+    allowed_header_fields = {
+        "name",
+        "description",
+        "key",
+        "required",
+        "sensitive",
+        "prefix",
+    }
+    for field in ("value", "secretBinding"):
+        if field in header:
+            fail(
+                f"{label}.{field} must be absent: Resend remote auth requires an "
+                "owner-supplied bearer credential"
+            )
+
+    actual_header_fields = set(header)
+    if actual_header_fields != allowed_header_fields:
+        field_differences = []
+        missing_fields = sorted(allowed_header_fields - actual_header_fields)
+        unexpected_fields = sorted(actual_header_fields - allowed_header_fields)
+        if missing_fields:
+            field_differences.append(f"missing fields: {missing_fields!r}")
+        if unexpected_fields:
+            field_differences.append(f"unexpected fields: {unexpected_fields!r}")
+        fail(
+            f"{label} must contain exactly the supported fields "
+            f"{sorted(allowed_header_fields)!r}; {'; '.join(field_differences)}"
+        )
 
     for field in ("name", "description", "prefix"):
         got = header.get(field)
