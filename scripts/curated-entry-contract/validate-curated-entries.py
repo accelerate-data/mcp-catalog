@@ -60,6 +60,25 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
         "runtime": "npx",
         "package": "@mailgun/mcp-server@2.1.2",
     },
+    "resend.yaml": {
+        "name": "Resend",
+        "entryKey": "obot-resend",
+        "serverUserType": "multiUser",
+        "runtime": "remote",
+        "remoteConfig": {
+            "fixedURL": "https://mcp.resend.com/mcp",
+        },
+        "remoteHeaders": [
+            {
+                "name": "Resend API key",
+                "description": "Shared Resend API key for the MCP deployment.",
+                "key": "Authorization",
+                "required": True,
+                "sensitive": True,
+                "prefix": "Bearer ",
+            }
+        ],
+    },
 }
 
 REQUIRED_NON_EMPTY_STRINGS = (
@@ -158,6 +177,100 @@ def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
         fail("remoteConfig.headers must be absent: no static credential is sent to the server")
 
 
+def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) -> None:
+    """Resend's hosted MCP server uses one shared bearer key at Instance scope.
+
+    Studio must keep the integration on one required deployment-owned secret,
+    without adding env-based credentials, static OAuth, or per-user header prompts.
+    """
+    if "env" in manifest:
+        fail(
+            "env must be absent: Resend remote auth must stay on the required shared bearer header"
+        )
+
+    multi_user_config = manifest.get("multiUserConfig")
+    if isinstance(multi_user_config, dict) and "userDefinedHeaders" in multi_user_config:
+        fail(
+            "multiUserConfig.userDefinedHeaders must be absent: "
+            "Resend remote auth is instance-owned, not per-user"
+        )
+
+    remote_config = manifest.get("remoteConfig")
+    if not isinstance(remote_config, dict):
+        fail("remoteConfig must be a mapping")
+        return
+
+    if "staticOAuthRequired" in remote_config:
+        fail("remoteConfig.staticOAuthRequired must be absent")
+
+    headers = remote_config.get("headers")
+    if not isinstance(headers, list) or len(headers) != 1:
+        fail(
+            "remoteConfig.headers must contain exactly one Authorization header "
+            "for the required shared bearer credential"
+        )
+        return
+
+    header = headers[0]
+    if not isinstance(header, dict):
+        fail("remoteConfig.headers[0] must be a mapping")
+        return
+
+    key = header.get("key")
+    if key != "Authorization":
+        fail(f"remoteConfig.headers[0].key is {key!r}, expected 'Authorization'")
+        return
+
+    label = "remoteConfig.headers[Authorization]"
+    expected_header = (expected.get("remoteHeaders") or [None])[0]
+    if not isinstance(expected_header, dict):
+        fail("curated entry pins invalid remoteHeaders contract")
+        return
+
+    allowed_header_fields = {
+        "name",
+        "description",
+        "key",
+        "required",
+        "sensitive",
+        "prefix",
+    }
+    for field in ("value", "secretBinding"):
+        if field in header:
+            fail(
+                f"{label}.{field} must be absent: Resend remote auth requires an "
+                "owner-supplied bearer credential"
+            )
+
+    actual_header_fields = set(header)
+    if actual_header_fields != allowed_header_fields:
+        field_differences = []
+        missing_fields = sorted(allowed_header_fields - actual_header_fields)
+        unexpected_fields = sorted(actual_header_fields - allowed_header_fields)
+        if missing_fields:
+            field_differences.append(f"missing fields: {missing_fields!r}")
+        if unexpected_fields:
+            field_differences.append(f"unexpected fields: {unexpected_fields!r}")
+        fail(
+            f"{label} must contain exactly the supported fields "
+            f"{sorted(allowed_header_fields)!r}; {'; '.join(field_differences)}"
+        )
+
+    for field in ("name", "description", "prefix"):
+        got = header.get(field)
+        want = expected_header[field]
+        if got != want:
+            if field == "prefix":
+                fail(f"{label}.prefix must be {want!r}")
+            else:
+                fail(f"{label}.{field} is {got!r}, expected {want!r}")
+
+    if header.get("required") is not True:
+        fail(f"{label}.required must be true")
+    if header.get("sensitive") is not True:
+        fail(f"{label}.sensitive must be true")
+
+
 def check_containerized_auth(manifest: dict, fail) -> None:
     """A containerized entry splits its credentials across two configuration tiers.
 
@@ -209,7 +322,9 @@ def check_containerized_auth(manifest: dict, fail) -> None:
 
 
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
-    if expected["runtime"] == "remote":
+    if expected.get("remoteHeaders") is not None:
+        check_resend_remote_auth(manifest, expected, fail)
+    elif expected["runtime"] == "remote":
         check_remote_user_scoped_auth(manifest, fail)
     elif expected["runtime"] == "containerized":
         check_containerized_auth(manifest, fail)
