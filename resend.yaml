@@ -9,9 +9,9 @@ description: |
 
   ## What you'll need to connect
 
-  By default, each User authorizes the hosted MCP server with Resend OAuth.
-  For headless or non-interactive clients, a Vibedata Owner can optionally set
-  one shared Resend API key for the deployment instead.
+  A Vibedata Owner configures the shared Resend API key for the deployment at
+  Instance level. Each User still connects that shared deployment separately
+  before it becomes available to their AgentSessions.
 metadata:
   categories: Communication, Developer Tools
 icon: https://resend.com/favicon.ico
@@ -21,9 +21,9 @@ remoteConfig:
   fixedURL: https://mcp.resend.com/mcp
   headers:
     - name: Resend API key
-      description: Optional shared API key for headless access; leave blank to authorize each User with Resend OAuth.
+      description: Shared Resend API key for the MCP deployment.
       key: Authorization
-      required: false
+      required: true
       sensitive: true
       prefix: "Bearer "
 toolPreview:

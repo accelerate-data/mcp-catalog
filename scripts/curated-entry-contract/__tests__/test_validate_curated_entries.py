@@ -30,11 +30,10 @@ EXPECTED_RESEND_ENTRY = {
         {
             "name": "Resend API key",
             "description": (
-                "Optional shared API key for headless access; leave blank to "
-                "authorize each User with Resend OAuth."
+                "Shared Resend API key for the MCP deployment."
             ),
             "key": "Authorization",
-            "required": False,
+            "required": True,
             "sensitive": True,
             "prefix": "Bearer ",
         }
@@ -51,7 +50,9 @@ VALID_RESEND_MANIFEST = {
     "description": (
         "The official Resend MCP server connects AI agents to Resend's hosted "
         "email platform for transactional email, contacts, broadcasts, domains, "
-        "and inbound-event workflows.\n"
+        "and inbound-event workflows.\n\n"
+        "A Vibedata Owner configures the shared Resend API key at Instance "
+        "level, and each User still connects that deployment separately.\n"
     ),
     "metadata": {
         "categories": "Communication, Developer Tools",
@@ -144,9 +145,9 @@ class CuratedEntryContractTest(unittest.TestCase):
     def test_rejects_resend_contract_regressions(self) -> None:
         cases = [
             (
-                "required header",
-                lambda manifest: manifest["remoteConfig"]["headers"][0].__setitem__("required", True),
-                "resend.yaml: remoteConfig.headers[Authorization].required must be false",
+                "optional header",
+                lambda manifest: manifest["remoteConfig"]["headers"][0].__setitem__("required", False),
+                "resend.yaml: remoteConfig.headers[Authorization].required must be true",
             ),
             (
                 "non-sensitive header",
@@ -184,7 +185,7 @@ class CuratedEntryContractTest(unittest.TestCase):
                         }
                     ],
                 ),
-                "resend.yaml: env must be absent: Resend remote auth is OAuth or an optional shared bearer token",
+                "resend.yaml: env must be absent: Resend remote auth must stay on the required shared bearer header",
             ),
             (
                 "per-user headers",
@@ -200,7 +201,7 @@ class CuratedEntryContractTest(unittest.TestCase):
                         ]
                     },
                 ),
-                "resend.yaml: multiUserConfig.userDefinedHeaders must be absent: Resend remote auth is not configured per-user in Studio",
+                "resend.yaml: multiUserConfig.userDefinedHeaders must be absent: Resend remote auth is instance-owned, not per-user",
             ),
         ]
 
