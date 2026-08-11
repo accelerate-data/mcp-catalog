@@ -18,6 +18,9 @@ SPEC.loader.exec_module(curated_entries)
 
 REPO_ROOT = MODULE_PATH.parents[2]
 
+with (REPO_ROOT / "resend.yaml").open() as manifest_file:
+    VALID_RESEND_MANIFEST = yaml.safe_load(manifest_file)
+
 EXPECTED_RESEND_ENTRY = {
     "name": "Resend",
     "entryKey": "obot-resend",
@@ -39,76 +42,6 @@ EXPECTED_RESEND_ENTRY = {
         }
     ],
 }
-
-VALID_RESEND_MANIFEST = {
-    "name": "Resend",
-    "entryKey": "obot-resend",
-    "serverUserType": "multiUser",
-    "shortDescription": (
-        "Send email and manage Resend audiences, broadcasts, domains, and webhooks"
-    ),
-    "description": (
-        "The official Resend MCP server connects AI agents to Resend's hosted "
-        "email platform for transactional email, contacts, broadcasts, domains, "
-        "and inbound-event workflows.\n\n"
-        "A Vibedata Owner configures the shared Resend API key at Instance "
-        "level, and each User still connects that deployment separately.\n"
-    ),
-    "metadata": {
-        "categories": "Communication, Developer Tools",
-    },
-    "icon": "https://resend.com/favicon.ico",
-    "repoURL": "https://github.com/resend/resend-mcp",
-    "runtime": "remote",
-    "remoteConfig": {
-        "fixedURL": "https://mcp.resend.com/mcp",
-        "headers": copy.deepcopy(EXPECTED_RESEND_ENTRY["remoteHeaders"]),
-    },
-    "toolPreview": [
-        {
-            "name": "send-email",
-            "description": "Send a transactional email to one or more recipients.",
-            "params": {
-                "to": "Recipient email addresses.",
-                "subject": "Email subject line.",
-                "text": "Plain-text email body.",
-            },
-        },
-        {
-            "name": "list-contacts",
-            "description": "List contacts, optionally filtered to a segment.",
-            "params": {
-                "segmentId": "Optional segment whose contacts should be listed.",
-                "limit": "Maximum contacts to return.",
-            },
-        },
-        {
-            "name": "verify-domain",
-            "description": "Trigger DNS verification for a Resend sender domain.",
-            "params": {
-                "id": "Domain ID to verify.",
-            },
-        },
-        {
-            "name": "create-broadcast",
-            "description": "Create a broadcast campaign for a Resend segment.",
-            "params": {
-                "name": "Broadcast name.",
-                "segmentId": "Audience segment ID.",
-                "subject": "Broadcast email subject.",
-            },
-        },
-        {
-            "name": "create-webhook",
-            "description": "Create a webhook for Resend delivery and complaint events.",
-            "params": {
-                "endpoint": "Webhook destination URL.",
-                "events": "Webhook event types to subscribe to.",
-            },
-        },
-    ],
-}
-
 
 class CuratedEntryContractTest(unittest.TestCase):
     maxDiff = None
@@ -140,7 +73,7 @@ class CuratedEntryContractTest(unittest.TestCase):
         )
 
     def test_accepts_curated_resend_manifest(self) -> None:
-        self.assertEqual(self.validate_resend_manifest(copy.deepcopy(VALID_RESEND_MANIFEST)), [])
+        self.assertEqual(self.validate_resend_manifest(VALID_RESEND_MANIFEST), [])
 
     def test_rejects_resend_contract_regressions(self) -> None:
         cases = [
@@ -188,6 +121,11 @@ class CuratedEntryContractTest(unittest.TestCase):
                 "resend.yaml: env must be absent: Resend remote auth must stay on the required shared bearer header",
             ),
             (
+                "empty env declaration",
+                lambda manifest: manifest.__setitem__("env", []),
+                "resend.yaml: env must be absent: Resend remote auth must stay on the required shared bearer header",
+            ),
+            (
                 "per-user headers",
                 lambda manifest: manifest.__setitem__(
                     "multiUserConfig",
@@ -202,6 +140,34 @@ class CuratedEntryContractTest(unittest.TestCase):
                     },
                 ),
                 "resend.yaml: multiUserConfig.userDefinedHeaders must be absent: Resend remote auth is instance-owned, not per-user",
+            ),
+            (
+                "empty per-user header declaration",
+                lambda manifest: manifest.__setitem__(
+                    "multiUserConfig", {"userDefinedHeaders": []}
+                ),
+                "resend.yaml: multiUserConfig.userDefinedHeaders must be absent: Resend remote auth is instance-owned, not per-user",
+            ),
+            (
+                "header static value",
+                lambda manifest: manifest["remoteConfig"]["headers"][0].__setitem__(
+                    "value", "shared-resend-key"
+                ),
+                "resend.yaml: remoteConfig.headers[Authorization].value must be absent: Resend remote auth requires an owner-supplied bearer credential",
+            ),
+            (
+                "header secret binding",
+                lambda manifest: manifest["remoteConfig"]["headers"][0].__setitem__(
+                    "secretBinding", "resend-api-key"
+                ),
+                "resend.yaml: remoteConfig.headers[Authorization].secretBinding must be absent: Resend remote auth requires an owner-supplied bearer credential",
+            ),
+            (
+                "unexpected header field",
+                lambda manifest: manifest["remoteConfig"]["headers"][0].__setitem__(
+                    "scope", "instance"
+                ),
+                "resend.yaml: remoteConfig.headers[Authorization] must contain exactly the supported fields ['description', 'key', 'name', 'prefix', 'required', 'sensitive']; unexpected fields: ['scope']",
             ),
         ]
 
