@@ -71,12 +71,9 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
         "remoteHeaders": [
             {
                 "name": "Resend API key",
-                "description": (
-                    "Optional shared API key for headless access; leave blank "
-                    "to authorize each User with Resend OAuth."
-                ),
+                "description": "Shared Resend API key for the MCP deployment.",
                 "key": "Authorization",
-                "required": False,
+                "required": True,
                 "sensitive": True,
                 "prefix": "Bearer ",
             }
@@ -181,22 +178,21 @@ def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
 
 
 def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) -> None:
-    """Resend's hosted MCP server supports OAuth by default and an optional bearer key.
+    """Resend's hosted MCP server uses one shared bearer key at Instance scope.
 
-    Studio must never turn that into a required deployment secret, static OAuth,
-    or a per-user header prompt. The only allowed operator-supplied credential is
-    one optional sensitive Authorization header for headless clients.
+    Studio must keep the integration on one required deployment-owned secret,
+    without adding env-based credentials, static OAuth, or per-user header prompts.
     """
     if manifest.get("env"):
         fail(
-            "env must be absent: Resend remote auth is OAuth or an optional shared bearer token"
+            "env must be absent: Resend remote auth must stay on the required shared bearer header"
         )
 
     user_defined_headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
     if user_defined_headers:
         fail(
             "multiUserConfig.userDefinedHeaders must be absent: "
-            "Resend remote auth is not configured per-user in Studio"
+            "Resend remote auth is instance-owned, not per-user"
         )
 
     remote_config = manifest.get("remoteConfig")
@@ -211,7 +207,7 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
     if not isinstance(headers, list) or len(headers) != 1:
         fail(
             "remoteConfig.headers must contain exactly one Authorization header "
-            "for optional headless access"
+            "for the required shared bearer credential"
         )
         return
 
@@ -240,8 +236,8 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
             else:
                 fail(f"{label}.{field} is {got!r}, expected {want!r}")
 
-    if header.get("required") is not False:
-        fail(f"{label}.required must be false")
+    if header.get("required") is not True:
+        fail(f"{label}.required must be true")
     if header.get("sensitive") is not True:
         fail(f"{label}.sensitive must be true")
 

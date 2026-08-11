@@ -86,10 +86,8 @@ entries:
       aiming an automated security scanner at Resend's production service would
       be unauthorized third-party testing.
     alternative: >-
-      The merge gate is a local contract review plus an authenticated
-      initialize/tool-discovery probe against https://mcp.resend.com/mcp using
-      a disposable Resend API key. The curated entry contract pins the hosted
-      endpoint and exact optional bearer-header shape, and it rejects
+      The merge gate is a local contract review of the required Instance-owned
+      bearer credential. The curated entry contract pins the hosted endpoint
+      and exact required Authorization header shape, and it rejects
       staticOAuthRequired, env-backed deployment secrets, and per-user header
-      prompts. Provider certification remains pending until the authenticated
-      probe is executed and recorded.
+      prompts. This declaration does not claim provider certification.
