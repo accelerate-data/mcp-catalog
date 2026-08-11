@@ -1,0 +1,55 @@
+name: Resend
+entryKey: obot-resend
+serverUserType: multiUser
+shortDescription: Send email and manage Resend audiences, broadcasts, domains, and webhooks
+description: |
+  The official Resend MCP server gives AI agents hosted access to Resend's
+  email platform for transactional messages, audience operations, broadcast
+  campaigns, domain verification, and delivery-event webhooks.
+
+  ## What you'll need to connect
+
+  By default, each User authorizes the hosted MCP server with Resend OAuth.
+  For headless or non-interactive clients, a Vibedata Owner can optionally set
+  one shared Resend API key for the deployment instead.
+metadata:
+  categories: Communication, Developer Tools
+icon: https://resend.com/favicon.ico
+repoURL: https://github.com/resend/resend-mcp
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.resend.com/mcp
+  headers:
+    - name: Resend API key
+      description: Optional shared API key for headless access; leave blank to authorize each User with Resend OAuth.
+      key: Authorization
+      required: false
+      sensitive: true
+      prefix: "Bearer "
+toolPreview:
+  - name: send-email
+    description: Send a transactional email to one or more recipients.
+    params:
+      to: Recipient email addresses.
+      subject: Email subject line.
+      text: Plain-text email body.
+  - name: list-contacts
+    description: List contacts, optionally filtered to a segment.
+    params:
+      segmentId: Optional segment whose contacts should be listed.
+      limit: Maximum contacts to return.
+  - name: verify-domain
+    description: Trigger DNS verification for a Resend sender domain.
+    params:
+      id: Domain ID to verify.
+  - name: create-broadcast
+    description: Create a broadcast campaign for a Resend segment.
+    params:
+      name: Broadcast name.
+      segmentId: Audience segment ID.
+      subject: Broadcast email subject.
+  - name: create-webhook
+    description: Create a webhook for Resend delivery and complaint events.
+    params:
+      endpoint: Webhook destination URL.
+      events: Webhook event types to subscribe to.

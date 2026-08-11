@@ -77,3 +77,19 @@ entries:
       rejects runtime arguments and remote configuration, and permits only the
       reviewed MAILGUN_API_KEY and MAILGUN_API_REGION environment fields, with
       the API key required and sensitive.
+
+  - file: resend.yaml
+    scan: manual
+    reason: >-
+      Remote runtime. The mcpwn workflow fuzzes first-party container images on
+      localhost; it does not attach to a vendor-hosted MCP endpoint, and
+      aiming an automated security scanner at Resend's production service would
+      be unauthorized third-party testing.
+    alternative: >-
+      The merge gate is a local contract review plus an authenticated
+      initialize/tool-discovery probe against https://mcp.resend.com/mcp using
+      a disposable Resend API key. The curated entry contract pins the hosted
+      endpoint and exact optional bearer-header shape, and it rejects
+      staticOAuthRequired, env-backed deployment secrets, and per-user header
+      prompts. Provider certification remains pending until the authenticated
+      probe is executed and recorded.

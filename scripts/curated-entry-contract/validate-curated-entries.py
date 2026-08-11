@@ -60,6 +60,28 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
         "runtime": "npx",
         "package": "@mailgun/mcp-server@2.1.2",
     },
+    "resend.yaml": {
+        "name": "Resend",
+        "entryKey": "obot-resend",
+        "serverUserType": "multiUser",
+        "runtime": "remote",
+        "remoteConfig": {
+            "fixedURL": "https://mcp.resend.com/mcp",
+        },
+        "remoteHeaders": [
+            {
+                "name": "Resend API key",
+                "description": (
+                    "Optional shared API key for headless access; leave blank "
+                    "to authorize each User with Resend OAuth."
+                ),
+                "key": "Authorization",
+                "required": False,
+                "sensitive": True,
+                "prefix": "Bearer ",
+            }
+        ],
+    },
 }
 
 REQUIRED_NON_EMPTY_STRINGS = (
@@ -158,6 +180,72 @@ def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
         fail("remoteConfig.headers must be absent: no static credential is sent to the server")
 
 
+def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) -> None:
+    """Resend's hosted MCP server supports OAuth by default and an optional bearer key.
+
+    Studio must never turn that into a required deployment secret, static OAuth,
+    or a per-user header prompt. The only allowed operator-supplied credential is
+    one optional sensitive Authorization header for headless clients.
+    """
+    if manifest.get("env"):
+        fail(
+            "env must be absent: Resend remote auth is OAuth or an optional shared bearer token"
+        )
+
+    user_defined_headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
+    if user_defined_headers:
+        fail(
+            "multiUserConfig.userDefinedHeaders must be absent: "
+            "Resend remote auth is not configured per-user in Studio"
+        )
+
+    remote_config = manifest.get("remoteConfig")
+    if not isinstance(remote_config, dict):
+        fail("remoteConfig must be a mapping")
+        return
+
+    if "staticOAuthRequired" in remote_config:
+        fail("remoteConfig.staticOAuthRequired must be absent")
+
+    headers = remote_config.get("headers")
+    if not isinstance(headers, list) or len(headers) != 1:
+        fail(
+            "remoteConfig.headers must contain exactly one Authorization header "
+            "for optional headless access"
+        )
+        return
+
+    header = headers[0]
+    if not isinstance(header, dict):
+        fail("remoteConfig.headers[0] must be a mapping")
+        return
+
+    key = header.get("key")
+    if key != "Authorization":
+        fail(f"remoteConfig.headers[0].key is {key!r}, expected 'Authorization'")
+        return
+
+    label = "remoteConfig.headers[Authorization]"
+    expected_header = (expected.get("remoteHeaders") or [None])[0]
+    if not isinstance(expected_header, dict):
+        fail("curated entry pins invalid remoteHeaders contract")
+        return
+
+    for field in ("name", "description", "prefix"):
+        got = header.get(field)
+        want = expected_header[field]
+        if got != want:
+            if field == "prefix":
+                fail(f"{label}.prefix must be {want!r}")
+            else:
+                fail(f"{label}.{field} is {got!r}, expected {want!r}")
+
+    if header.get("required") is not False:
+        fail(f"{label}.required must be false")
+    if header.get("sensitive") is not True:
+        fail(f"{label}.sensitive must be true")
+
+
 def check_containerized_auth(manifest: dict, fail) -> None:
     """A containerized entry splits its credentials across two configuration tiers.
 
@@ -209,7 +297,9 @@ def check_containerized_auth(manifest: dict, fail) -> None:
 
 
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
-    if expected["runtime"] == "remote":
+    if expected.get("remoteHeaders") is not None:
+        check_resend_remote_auth(manifest, expected, fail)
+    elif expected["runtime"] == "remote":
         check_remote_user_scoped_auth(manifest, fail)
     elif expected["runtime"] == "containerized":
         check_containerized_auth(manifest, fail)
