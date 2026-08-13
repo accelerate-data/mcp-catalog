@@ -40,6 +40,14 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             "port": 8080,
             "path": "/",
             "healthzPath": "/health",
+            "oauth": {
+                "provider": "microsoftEntra",
+                "authorityEnv": "AzureAd__Instance",
+                "tenantIDEnv": "AzureAd__TenantId",
+                "clientIDEnv": "AzureAd__ClientId",
+                "clientSecretEnv": "AzureAd__ClientCredentials__0__ClientSecret",
+                "scopes": ["api://${AzureAd__ClientId}/Mcp.Tools.ReadWrite"],
+            },
         },
         "envKeys": (
             # No command-line flag sets the listen address. Without this key the
@@ -272,13 +280,10 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
 
 
 def check_containerized_auth(manifest: dict, fail) -> None:
-    """A containerized entry splits its credentials across two configuration tiers.
+    """A containerized entry uses deployment config for its OAuth application.
 
-    A containerized entry has no endpoint to configure, so it cannot use static
-    OAuth; an operator-supplied `env` block is legitimate there and carries the
-    deployment's own registration. The per-user credential must still come from
-    `multiUserConfig.userDefinedHeaders`, which is the only surface Studio
-    projects into User Settings.
+    Obot owns every user's authorization grant and injects the refreshed bearer
+    into that user's request. The catalog must not fall back to pasted headers.
     """
     for index, field in enumerate(manifest.get("env") or []):
         label = f"env[{index}]"
@@ -295,30 +300,16 @@ def check_containerized_auth(manifest: dict, fail) -> None:
             fail(f"env[{key}].value must be absent: Obot ignores it on a catalog entry")
 
     headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
-    if not isinstance(headers, list) or not headers:
-        fail(
-            "multiUserConfig.userDefinedHeaders must be a non-empty list: "
-            "the per-user credential has no other configuration surface"
-        )
+    if headers:
+        fail("multiUserConfig.userDefinedHeaders must be absent: Obot owns the per-user OAuth grant")
+
+    oauth = (manifest.get("containerizedConfig") or {}).get("oauth")
+    if not isinstance(oauth, dict):
+        fail("containerizedConfig.oauth must declare the deployment-owned OAuth application")
         return
-
-    for index, header in enumerate(headers):
-        label = f"userDefinedHeaders[{index}]"
-        if not isinstance(header, dict):
-            fail(f"{label} must be a mapping")
-            continue
-        key = header.get("key")
-        if not isinstance(key, str) or not key.strip():
-            fail(f"{label}.key must be a non-empty string")
-            continue
-        label = f"userDefinedHeaders[{key}]"
-        # Studio drops any header carrying its own value, so the user is never
-        # asked for it and the server receives nothing.
-        if header.get("value") or "secretBinding" in header:
-            fail(f"{label} must not set value or secretBinding: Studio drops such a field")
-
-    if not any(isinstance(h, dict) and h.get("required") is True for h in headers):
-        fail("at least one userDefinedHeaders entry must be required")
+    expected = CURATED_ENTRIES["fabric-pro-dev.yaml"]["containerizedConfig"]["oauth"]
+    if oauth != expected:
+        fail(f"containerizedConfig.oauth is {oauth!r}, expected {expected!r}")
 
 
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:

@@ -21,11 +21,11 @@ description: |
 
   ## What you'll need to connect
 
-  This server authenticates each user individually, so it needs setup in two places.
+  This server authenticates each user individually through Microsoft Entra.
 
   Your administrator registers one Microsoft Entra application for this server and fills in its tenant ID, client ID, instance, and client secret when adding the connector, alongside the fixed listen address the image needs. That registration must expose the `Mcp.Tools.ReadWrite` delegated scope and hold delegated Microsoft Fabric permissions, so the server can exchange each user's token for a Fabric token on their behalf.
 
-  You then supply your own access token for that application in User Settings. The server calls Fabric as you, under your existing Fabric permissions, and Fabric records every call in its audit logs. Tokens are short-lived, so you will need to refresh yours when it expires.
+  When you connect, Obot opens the Microsoft sign-in and consent flow for that application. Obot stores and refreshes your grant separately from every other user, then supplies a bearer token only to your requests. Studio never stores or returns the provider token. The server calls Fabric as you, under your existing Fabric permissions, and Fabric records every call in its audit logs.
 
   ## License
 
@@ -43,6 +43,14 @@ containerizedConfig:
     - all
     - --outgoing-auth-strategy
     - UseOnBehalfOf
+  oauth:
+    provider: microsoftEntra
+    authorityEnv: AzureAd__Instance
+    tenantIDEnv: AzureAd__TenantId
+    clientIDEnv: AzureAd__ClientId
+    clientSecretEnv: AzureAd__ClientCredentials__0__ClientSecret
+    scopes:
+      - "api://${AzureAd__ClientId}/Mcp.Tools.ReadWrite"
 env:
   - key: ASPNETCORE_URLS
     name: Server Listen Address
@@ -74,15 +82,6 @@ env:
     required: true
     sensitive: true
     description: A client secret from the same app registration. The server needs it to exchange each user's token for a Fabric token on their behalf.
-multiUserConfig:
-  userDefinedHeaders:
-    - key: Authorization
-      name: Fabric Access Token
-      required: true
-      sensitive: true
-      prefix: "Bearer "
-      description: Your own Microsoft Entra access token for this server's app registration, requested with the Mcp.Tools.ReadWrite scope. Every Fabric call runs under your identity and your Fabric permissions.
-
 toolPreview:
   - name: core_create-item
     description: Creates a new item in a Fabric workspace. Use this when the user wants to create a Lakehouse, Notebook, or other Fabric item type. Requires workspace ID, item name, and item type.
