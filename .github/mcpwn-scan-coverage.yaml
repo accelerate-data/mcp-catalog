@@ -60,9 +60,11 @@ entries:
       container reported "Found 0 tools, 0 resources" and exited non-zero —
       confirming both the readiness contract and that the endpoint is not
       anonymously reachable. The image is a vendor-published tag pinned by the
-      curated entry contract so it cannot drift silently; the contract also
-      forbids a static value on any env key and requires the per-user
-      credential to arrive through multiUserConfig.userDefinedHeaders.
+      curated entry contract so it cannot drift silently. The contract forbids
+      static environment values and user-defined Authorization headers, and
+      requires the deployment-owned Entra OAuth descriptor that lets Obot hold
+      each user's renewable grant and inject a bearer only for that user's
+      request.
 
   - file: mailgun.yaml
     scan: manual
