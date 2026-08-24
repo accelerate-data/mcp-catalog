@@ -1,175 +1,231 @@
 name: HubSpot
 entryKey: obot-hubspot
 serverUserType: singleUser
-shortDescription: Manage HubSpot CRM objects, schemas, properties, and workflows
+shortDescription: Connect to HubSpot CRM data with secure, per-user OAuth access
 description: |
-  A Model Context Protocol (MCP) server that integrates with HubSpot CRM.
-
-  This MCP server is currently in beta.
+  The official HubSpot MCP server connects AI agents to your HubSpot CRM data through HubSpot-hosted OAuth.
 
   ## Features
-  - **CRM**: Manage CRM objects, schemas, and properties
-  - **Automation**: Manage HubSpot workflows
+  - **CRM records**: Search, retrieve, create, and update supported CRM records
+  - **Activities**: Work with calls, emails, meetings, notes, and tasks
+  - **Marketing**: Analyze campaigns and marketing emails; create and update marketing email drafts
+  - **Conversations**: Search supported inbox conversations and messages
+  - **Per-user access**: Respects each connected user's HubSpot permissions
 
   ## What you'll need to connect
 
-  **Required:**
-  - **HubSpot private app access token**: You can find this in Settings -> Integrations -> Private Apps.
+  An administrator must create a HubSpot MCP Auth App before users can connect:
+
+  1. In HubSpot, go to **Development > MCP Auth Apps** and create an app.
+  2. Add this redirect URL: `https://<your-obot-host>/oauth/mcp/callback`.
+  3. In Obot, configure the app's Client ID and Client Secret for this server.
+  4. Connect each user through the HubSpot OAuth prompt.
+
+  HubSpot requires OAuth with PKCE and a client secret. It does not support Dynamic Client Registration, so the Client ID and Client Secret must be configured by an administrator. The first user to connect may need HubSpot administrator access; subsequent users authenticate individually and retain their own HubSpot permissions.
+
+  ## Important limitations
+
+  HubSpot's remote MCP server does not expose all features of the legacy HubSpot server. Use the legacy server while you need custom object schemas or property administration, explicit association management, workflow inspection, archived-record access, bulk operations, or HubSpot UI deep links.
+
+  Sensitive Data properties are unavailable. When Sensitive Data is enabled for the HubSpot account, activity and conversation data are unavailable through this server.
 
 metadata:
   categories: Business, SaaS & API Integrations
+  allow-multiple: "true"
+repoURL: https://developers.hubspot.com/docs/apps/developer-platform/build-apps/integrate-with-the-remote-hubspot-mcp-server
 icon: https://img.icons8.com/?size=100&id=Xq3RA1kWzz3X&format=png&color=000000
-repoURL: https://www.npmjs.com/package/@hubspot/mcp-server
-
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.hubspot.com
+  staticOAuthRequired: true
 toolPreview:
-  - name: hubspot-batch-create-associations
-    description: "Establishes relationships between HubSpot objects, linking records across different object types, by creating associations between objects in batch."
+  - name: discover_hubspot_schema
+    description: Discover HubSpot CRM object types and schemas.
     params:
-      fromObjectType: 'The type of HubSpot object to create association from. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      inputs: List of association inputs defining the relationships to create. (max 100 associations per batch)
-      toObjectType: 'The type of HubSpot object to create association to. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      types: The types of associations to create
-  - name: hubspot-batch-create-objects
-    description: "Creates multiple HubSpot objects of the same objectType in a single API call, optimizing for bulk operations."
+      query: Schema search query.
+  - name: get_campaign_attribution_reports
+    description: Retrieve campaign attribution reports and metrics.
     params:
-      inputs: Array of objects to create (maximum 100 per batch)
-      objectType: 'The type of HubSpot object to create. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-  - name: hubspot-batch-read-objects
-    description: "Retrieves multiple HubSpot objects of the same object type by their IDs in a single batch operation."
+      attributionModel: Attribution model.
+      campaignCrmObjectIds: Campaign CRM object IDs.
+      dimensions: Report dimensions.
+      endDate: Report end date.
+      filters: Report filters.
+      hasReadToolInstructions: Whether tool instructions were read.
+      limit: Maximum results.
+      metrics: Report metrics.
+      mode: Report mode.
+      responseFormat: Response format.
+      sortByMetric: Metric used to sort results.
+      sortOrder: Result sort order.
+      startDate: Report start date.
+      taskId: Task ID.
+  - name: get_content_analytics_report
+    description: Run content analytics reports for HubSpot pages and blog posts.
     params:
-      inputs: Array of object IDs to read (maximum 100 per batch)
-      objectType: 'The type of HubSpot object to read. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      properties: Optional list of property names to include in the results
-      propertiesWithHistory: Optional list of property names to include with history
-  - name: hubspot-batch-update-objects
-    description: "Updates multiple existing HubSpot objects of the same objectType in a single API call."
+      contentIds: Content IDs.
+      end: Reporting window end.
+      excludedIds: Content IDs to exclude.
+      includeMetadata: Include content metadata.
+      limit: Maximum report rows.
+      mode: Report mode.
+      offset: Pagination offset.
+      paginationCursor: Pagination cursor.
+      peopleType: People type for people reports.
+      period: Time-series reporting period.
+      scaleByPercent: Scale totals by percentage.
+      search: Content search query.
+      sortDirection: Result sort direction.
+      sortMetric: Metric used to sort results.
+      start: Reporting window start.
+  - name: get_conversation_channel_metadata
+    description: List HubSpot conversation channels and channel instances.
     params:
-      inputs: Array of objects to update (maximum 100 per batch)
-      objectType: 'The type of HubSpot object to update. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-  - name: hubspot-create-engagement
-    description: "Creates a HubSpot engagement (Note or Task) associated with contacts, companies, deals, or tickets."
+      activeOnly: Return only active channels.
+  - name: get_crm_objects
+    description: Retrieve HubSpot CRM records by ID.
     params:
-      associations: Associated records for this engagement
-      metadata: Metadata specific to the engagement type
-      ownerId: The ID of the owner of this engagement
-      timestamp: Timestamp for the engagement (milliseconds since epoch). Defaults to current time if not provided.
-      type: The type of engagement to create (NOTE or TASK)
-  - name: hubspot-create-property
-    description: "Creates new custom properties for HubSpot object types, enabling data structure customization."
+      objectIds: CRM record IDs.
+      objectType: CRM object type.
+      properties: Properties to include.
+  - name: get_marketing_email_analytics
+    description: Retrieve marketing email analytics.
     params:
-      calculationFormula: A formula that is used to compute a calculated property
-      description: A description of the property that will be shown as help text
-      displayOrder: The order for displaying the property (lower numbers displayed first)
-      externalOptions: Only for enumeration type properties. Should be set to true in conjunction with a referencedObjectType
-      fieldType: Controls how the property appears in HubSpot
-      formField: Whether the property can be used in forms
-      groupName: The name of the property group the property belongs to
-      hasUniqueValue: Whether the property's value must be unique
-      hidden: Whether the property should be hidden in HubSpot
-      label: A human-readable property label that will be shown in HubSpot
-      name: The internal property name, which must be used when referencing the property via the API
-      objectType: 'The type of HubSpot object to create the property for. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      options: A list of valid options for enumeration properties
-      type: The data type of the property
-  - name: hubspot-generate-feedback-link
-    description: "Generates a link for the user to submit feedback about this MCP server."
-  - name: hubspot-get-association-definitions
-    description: "Retrieves valid association types between specific HubSpot object types."
+      mode: Analytics mode.
+  - name: get_organization_details
+    description: Retrieve organization teams, roles, seats, and account information.
     params:
-      fromObjectType: 'The type of HubSpot object to get association from. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      toObjectType: 'The type of HubSpot object to get association to. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-  - name: hubspot-get-engagement
-    description: "Retrieves a HubSpot engagement by ID."
+      include: Data sections to include.
+  - name: get_properties
+    description: Retrieve CRM property definitions.
     params:
-      engagementId: The ID of the engagement to retrieve
-  - name: hubspot-get-link
-    description: "Generates HubSpot UI links for different pages based on object types and IDs."
+      objectType: CRM object type.
+      propertyNames: Property names.
+  - name: get_user_details
+    description: Retrieve authenticated user details and CRM access.
     params:
-      pageRequests: Array of page link requests to generate
-      portalId: The HubSpot portal/account ID
-      uiDomain: The HubSpot UI domain(e.g., 'app.hubspot.com')
-  - name: hubspot-get-property
-    description: "Retrieves detailed information about a specific property for a HubSpot object type."
+      include: Data sections to include.
+  - name: manage_campaign_objects
+    description: Create, update, clone, and manage campaign objects.
     params:
-      objectType: 'The type of HubSpot object the property belongs to. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      propertyName: The name of the property to retrieve
-  - name: hubspot-get-schemas
-    description: "Retrieves all custom object schemas defined in the HubSpot account."
-  - name: hubspot-get-user-details
-    description: "Authenticates and analyzes the current HubSpot access token, providing context about the user's permissions and account details."
-  - name: hubspot-get-workflow
-    description: "This tool retrieves detailed information about a specific workflow from the HubSpot account."
+      assetRequest: Campaign asset operation request.
+      cloneRequest: Campaign clone request.
+      createRequest: Campaign create request.
+      operationType: Campaign operation type.
+      updateRequest: Campaign update request.
+  - name: manage_crm_objects
+    description: Create or update supported HubSpot CRM records and activities.
     params:
-      flowId: The ID of the workflow to retrieve
-  - name: hubspot-list-associations
-    description: "Retrieves existing relationships between a specific object and other objects of a particular type."
+      confirmationStatus: Confirmation status.
+      createRequest: CRM create request.
+      updateRequest: CRM update request.
+  - name: manage_landing_page
+    description: Create, update, retrieve, and manage HubSpot landing pages.
     params:
-      after: Paging cursor token for retrieving the next page of results
-      objectId: The ID of the HubSpot object to get associations from
-      objectType: 'The type of HubSpot object to get associations from. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      toObjectType: 'The type of HubSpot object to get associations to. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-  - name: hubspot-list-objects
-    description: "Retrieves a paginated list of objects of a specified type from HubSpot."
+      action: Landing-page action.
+      anchorModuleId: Module ID used as an anchor.
+      anchorPosition: Position relative to the anchor.
+      availableForNewContent: Whether the page is available for new content.
+      columnStart: Starting column position.
+      columnsSpanned: Number of columns spanned.
+      contentId: Landing-page content ID.
+      featuredImageUrl: Featured image URL.
+      fieldOverridesJson: Module field overrides as JSON.
+      folderName: Landing-page folder name.
+      headHtml: HTML inserted in the page head.
+      htmlTitle: Page HTML title.
+      hublSource: HubL source for the page.
+      language: Page language.
+      limit: Maximum results.
+      metaDescription: Page meta description.
+      moduleId: Module ID.
+      modulePath: Module path.
+      offset: Pagination offset.
+      pageName: Landing-page name.
+      query: Landing-page search query.
+      responseFormat: Response format.
+      revisionId: Landing-page revision ID.
+      rowStart: Starting row position.
+      sectionId: Landing-page section ID.
+      slug: Landing-page URL slug.
+      stylesJson: Landing-page styles as JSON.
+      templatePath: Landing-page template path.
+      textColor: Landing-page text color.
+      themePath: Landing-page theme path.
+  - name: manage_marketing_email
+    description: Create, update, clone, preview, and manage draft marketing emails.
     params:
-      after: The paging cursor token of the last successfully read resource.
-      archived: Whether to return only results that have been archived.
-      associations: A list of object types to retrieve associated IDs for (e.g., appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users).
-      limit: 'The maximum number of results to display per page (max: 500).'
-      objectType: 'The type of HubSpot object to list. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      properties: A list of the properties to be returned in the response.
-  - name: hubspot-list-properties
-    description: "This tool retrieves a complete catalog of properties for any HubSpot object type."
+      confirmationStatus: Confirmation status.
+      operation: Marketing email operation.
+  - name: query_crm_data
+    description: Query HubSpot CRM data with SQL.
     params:
-      archived: Whether to return only properties that have been archived.
-      includeHidden: Whether to include hidden properties in the response.
-      objectType: 'The type of HubSpot object to get properties for. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-  - name: hubspot-list-workflows
-    description: "This tool retrieves a paginated list of workflows from the HubSpot account."
+      chatInsights: Chat insights for the query.
+      sql: SQL query.
+      verbosityLevel: Response verbosity level.
+  - name: read_campaign_data
+    description: Retrieve campaign analytics, assets, and contacts.
     params:
-      after: Cursor token to fetch the next page of results. Use the paging.next.after value from the previous response.
-      limit: The maximum number of workflows to return per page (1-100).
-  - name: hubspot-search-objects
-    description: "Performs advanced filtered searches across HubSpot object types using complex criteria."
+      analyticsRequest: Campaign analytics request.
+      assetMetricsRequest: Campaign asset metrics request.
+      contactsRequest: Campaign contacts request.
+      operation: Campaign data operation.
+  - name: search_conversations
+    description: Search HubSpot conversations and messages.
     params:
-      after: The paging cursor token of the last successfully read resource.
-      filterGroups: Groups of filters to apply (combined with OR).
-      limit: 'The maximum number of results to display per page (max: 100).'
-      objectType: 'The type of HubSpot object to search. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      properties: A list of the properties to be returned in the response.
-      query: 'Text to search across default searchable properties of the specified object type. Each object type has different searchable properties. For example: contacts (firstname, lastname, email, phone, company), companies (name, website, domain, phone), deals (dealname, pipeline, dealstage, description, dealtype), etc'
-      sorts: A list of sort criteria to apply to the results.
-  - name: hubspot-update-engagement
-    description: "Updates an existing HubSpot engagement (Note or Task). Allows modification of engagement attributes, content, and metadata."
+      after: Pagination cursor.
+      aggregationDimensions: Conversation aggregation dimensions.
+      assignedAgentId: Assigned agent ID filter.
+      channelInstanceId: Channel instance ID filter.
+      conversationChannelId: Conversation channel ID filter.
+      conversationStatus: Conversation status filter.
+      endTime: Time-range end.
+      inboxId: Inbox ID filter.
+      includeAllDialogue: Include system and bot dialogue.
+      includeMessages: Include messages.
+      maxBucketsPerDimension: Maximum aggregation buckets.
+      maxConversations: Maximum conversations.
+      messageDetail: Message detail level.
+      messageLimit: Maximum messages per conversation.
+      objectId: Associated CRM object ID.
+      objectType: Associated CRM object type.
+      query: Conversation search query.
+      searchMethod: Search method.
+      startTime: Time-range start.
+  - name: search_crm_objects
+    description: Search and filter HubSpot CRM records.
     params:
-      associations: Associated records for this engagement
-      engagementId: The ID of the engagement to update
-      metadata: Metadata specific to the engagement type (Note or Task)
-      ownerId: The ID of the owner of this engagement
-      timestamp: Timestamp for the engagement (milliseconds since epoch).
-  - name: hubspot-update-property
-    description: "Updates existing custom properties for HubSpot object types, enabling data structure customization."
+      chatInsights: Chat insights for the search.
+      filterGroups: Search filter groups.
+      limit: Maximum results.
+      objectType: CRM object type.
+      offset: Pagination offset.
+      properties: Properties to include.
+      query: CRM record search query.
+      sorts: Result sort rules.
+  - name: search_properties
+    description: Find CRM property definitions by keyword.
     params:
-      calculationFormula: A formula that is used to compute a calculated property
-      description: A description of the property that will be shown as help text
-      displayOrder: The order for displaying the property (lower numbers displayed first)
-      fieldType: Controls how the property appears in HubSpot
-      formField: Whether the property can be used in forms
-      groupName: The name of the property group the property belongs to
-      hidden: Whether the property should be hidden in HubSpot
-      label: A human-readable property label that will be shown in HubSpot
-      objectType: 'The type of HubSpot object the property belongs to. Valid values include: appointments, companies, contacts, courses, deals, leads, line_items, listings, marketing_events, meetings, orders, postal_mail, products, quotes, services, subscriptions, tickets, users. For custom objects, use the hubspot-get-schemas tool to get the objectType.'
-      options: A list of valid options for enumeration properties
-      propertyName: The name of the property to update
-      type: The data type of the property
-
-env:
-  - name: Private App Access Token
-    description: The access token for your private app in HubSpot. You can find this in Settings -> Integrations -> Private Apps.
-    key: PRIVATE_APP_ACCESS_TOKEN
-    sensitive: true
-    required: true
-runtime: containerized
-containerizedConfig:
-  image: ghcr.io/obot-platform/mcp-images/hubspot:latest
-  port: 8099
-  path: "/"
+      keywords: Property search keywords.
+      objectType: CRM object type.
+      query: Legacy property search query.
+  - name: search_owners
+    description: Find CRM record owners by name, email, or ID.
+    params:
+      limit: Maximum results.
+      offset: Pagination offset.
+      ownerIds: Owner IDs.
+      searchQuery: Owner name or email query.
+  - name: submit_feedback
+    description: Submit feedback about the HubSpot MCP server.
+    params:
+      explanationOfSatisfaction: Explanation of satisfaction.
+      feedback: Feedback content.
+      feedbackType: Feedback type.
+      goal: Feedback goal.
+      sourceInterface: Source interface.
+      triggeringToolName: Triggering tool name.
+  - name: tool_guidance
+    description: Retrieve usage guidance for HubSpot tools.
+    params:
+      toolNames: Tool names to retrieve guidance for.
