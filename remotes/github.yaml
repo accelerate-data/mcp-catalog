@@ -9,7 +9,7 @@ upgradeNote: |
   - **New options:** Choose a focused toolset or all tools, with standard and read-only variants for each endpoint.
   - **Authentication unchanged:** Continue using a GitHub Personal Access Token with the permissions required by the selected tools.
 description: |
-  A Model Context Protocol (MCP) server that provides easy connection to GitHub using the hosted version – no local setup or runtime required. Access comprehensive GitHub functionality through a remote server with additional tools not available in the local version.
+  Manage GitHub repositories, issues, pull requests, workflows, and more through [GitHub's hosted MCP server](https://github.com/github/github-mcp-server), with no local runtime required and additional remote-only tools.
 
   > **⚠️ Upgrade notice**
   >

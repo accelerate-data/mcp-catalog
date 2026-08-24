@@ -1,0 +1,25 @@
+name: Clay
+entryKey: obot-clay
+serverUserType: singleUser
+shortDescription: Find prospects, enrich contacts, and research target companies
+description: |
+  Find prospects, enrich contacts, and research target companies through [Clay's official MCP server](https://www.notion.so/clayrun/Clay-Claude-MCP-Server-Documentation-2ef7e66eb01480c9820de48041591aeb).
+
+  ## Features
+  - Find and enrich contacts at target companies
+  - Research and enrich companies
+  - Add contact and company data points
+  - Inspect available credits and previous searches
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **Clay Account**: Each user authenticates through OAuth and receives access based on their Clay account and credit balance
+
+metadata:
+  categories: Sales, Marketing, Data & Analytics
+icon: "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://clay.com&size=256"
+repoURL: https://www.notion.so/clayrun/Clay-Claude-MCP-Server-Documentation-2ef7e66eb01480c9820de48041591aeb
+runtime: remote
+remoteConfig:
+  fixedURL: https://api.clay.com/v3/mcp
