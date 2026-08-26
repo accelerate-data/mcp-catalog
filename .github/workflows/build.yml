@@ -17,7 +17,7 @@ jobs:
       - name: Checkout Obot validator
         uses: actions/checkout@v6
         with:
-          repository: obot-platform/obot
+          repository: accelerate-data/obot
           ref: main
           path: .obot
 

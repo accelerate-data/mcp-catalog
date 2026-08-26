@@ -88,7 +88,7 @@ Apply the same public-destination and manual-redirect policy used for authentica
 Run exactly one applicable command after verification:
 
 ```sh
-go -C scripts/claude-directory run . ledger add --id ID --status existing --catalog-entry remotes/FILE.yaml
+go -C scripts/claude-directory run . ledger add --id ID --status existing --catalog-entry PATH/TO/EXISTING/FILE.yaml
 go -C scripts/claude-directory run . ledger add --id ID --status imported --catalog-entry remotes/FILE.yaml
 go -C scripts/claude-directory run . ledger add --id ID --status skipped --reason "Specific reason"
 ```
