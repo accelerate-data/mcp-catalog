@@ -1,0 +1,25 @@
+name: PostHog
+entryKey: obot-posthog
+serverUserType: singleUser
+shortDescription: Query product analytics and manage PostHog insights and experiments
+description: |
+  Query product analytics and manage dashboards, flags, experiments, surveys, errors, and logs through [PostHog's official MCP server](https://posthog.com/docs/model-context-protocol).
+
+  ## Features
+  - Query product data using natural language, HogQL, or SQL
+  - Create and manage insights and dashboards
+  - Manage feature flags, experiments, and surveys
+  - Explore errors, logs, event definitions, schemas, and LLM costs
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **PostHog Account**: Each user authenticates through OAuth and can access organizations and projects allowed by their permissions
+
+metadata:
+  categories: Developer Tools, Data & Analytics, Monitoring & Observability
+icon: "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://posthog.com&size=256"
+repoURL: https://posthog.com/docs/model-context-protocol
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.posthog.com/mcp

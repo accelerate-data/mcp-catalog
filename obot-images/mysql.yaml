@@ -1,0 +1,86 @@
+name: MySQL
+entryKey: obot-mysql
+serverUserType: singleUser
+shortDescription: Execute SQL queries and explore MySQL databases with structured access control
+description: '![Tests](https://github.com/designcomputer/mysql_mcp_server/actions/workflows/test.yml/badge.svg)
+
+  ![PyPI - Downloads](https://img.shields.io/pypi/dm/mysql-mcp-server)
+
+
+  Execute SQL queries and explore MySQL databases through a structured, controlled interface.
+
+
+  ## Features
+
+  - **Database Exploration**: List available MySQL tables as resources and read table contents
+
+  - **Query Execution**: Execute SQL queries with proper error handling and comprehensive logging
+
+  - **Resource Management**: Structured interface for safer database operations
+
+
+  ## What you''ll need to connect
+
+
+  **Required:**
+
+  - **MySQL Host**: Database host (e.g. localhost)
+
+  - **MySQL User**: Database username
+
+  - **MySQL Password**: Database password
+
+  - **MySQL Database**: Database name
+
+
+  **Optional:**
+
+  - **MySQL Port**: Database port (default: 3306)
+
+
+  **Security Tips:**
+
+  - Create a dedicated MySQL user with minimal required permissions
+
+  - Never use root credentials or administrative accounts
+
+  - Follow the principle of least privilege when configuring database access
+
+  '
+metadata:
+  categories: Databases,Data & Analytics
+icon: https://avatars.githubusercontent.com/u/25017723?v=4
+repoURL: https://github.com/designcomputer/mysql_mcp_server
+env:
+- key: MYSQL_HOST
+  name: MySQL Host
+  required: true
+  sensitive: false
+  description: The hostname or IP address of your MySQL database
+- key: MYSQL_PORT
+  name: MySQL Port
+  required: false
+  sensitive: false
+  description: The port number of your MySQL database. Defaults to 3306.
+- key: MYSQL_USER
+  name: MySQL User
+  required: true
+  sensitive: false
+  description: The username for your MySQL database.
+- key: MYSQL_PASSWORD
+  name: MySQL Password
+  required: true
+  sensitive: true
+  description: The password for your MySQL database.
+- key: MYSQL_DATABASE
+  name: MySQL Database
+  required: true
+  sensitive: false
+  description: The name of your MySQL database.
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/mysql-mcp-server:0.2.2
+  port: 8099
+  path: /
+  args:
+  - mysql_mcp_server

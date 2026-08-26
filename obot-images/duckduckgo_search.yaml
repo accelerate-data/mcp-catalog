@@ -1,0 +1,52 @@
+name: DuckDuckGo Search
+entryKey: obot-duckduckgo-search
+serverUserType: singleUser
+shortDescription: Search the web with DuckDuckGo and retrieve webpage content with parsing
+description: 'Search the web through DuckDuckGo and retrieve parsed webpage content with LLM-friendly formatting.
+
+
+  ## Features
+
+  - **Web Search**: Search DuckDuckGo with advanced rate limiting and result formatting
+
+  - **Content Fetching**: Retrieve and parse webpage content with intelligent text extraction
+
+  - **Rate Limiting**: Built-in protection against rate limits (30 searches/min, 20 fetches/min)
+
+  - **LLM-Friendly Output**: Results formatted specifically for large language model consumption
+
+  - **Error Handling**: Comprehensive error handling and logging with graceful degradation
+
+
+  ## What you''ll need to connect
+
+
+  **No Setup Required**: DuckDuckGo Search works out-of-the-box with no API keys or configuration needed.
+
+  '
+metadata:
+  categories: Search
+icon: https://img.icons8.com/?size=100&id=63778&format=png&color=000000
+repoURL: https://github.com/nickclyde/duckduckgo-mcp-server
+env: []
+toolPreview:
+- name: search
+  description: Search DuckDuckGo and return web results.
+  params:
+    max_results: Maximum number of results
+    query: Search query
+    region: Optional search region
+- name: fetch_content
+  description: Fetch and extract readable text from a webpage.
+  params:
+    backend: Content extraction backend
+    max_length: Maximum content length
+    start_index: Content start index
+    url: Webpage URL
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/duckduckgo-search:0.6.1
+  port: 8099
+  path: /
+  args:
+  - duckduckgo-mcp-server

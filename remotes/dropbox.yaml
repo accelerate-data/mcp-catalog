@@ -1,0 +1,25 @@
+name: Dropbox
+entryKey: obot-dropbox
+serverUserType: singleUser
+shortDescription: Search, organize, create, and share Dropbox files and folders
+description: |
+  Search, organize, create, and share Dropbox files and folders through [Dropbox's official MCP connector](https://help.dropbox.com/integrations/connect-dropbox-to-claude), which respects existing permissions.
+
+  ## Features
+  - Search, browse, preview, and download files
+  - Create, copy, move, and delete files and folders
+  - Create and inspect shared links
+  - Create and manage file requests
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **Dropbox Account**: Each user authenticates through OAuth and can access files allowed by their Dropbox permissions
+
+metadata:
+  categories: File Management, Productivity, SaaS & API Integrations
+icon: "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://dropbox.com&size=256"
+repoURL: https://help.dropbox.com/integrations/connect-dropbox-to-claude
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.dropbox.com/claude_app_mcp

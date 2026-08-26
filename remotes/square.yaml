@@ -1,0 +1,53 @@
+name: Square
+entryKey: obot-square
+serverUserType: singleUser
+shortDescription: Manage Square payments, customers, orders, catalog, and business operations
+description: |
+  Manage customers, orders, items, payments, and commerce operations across the Square API platform through [Square's MCP server](https://github.com/square/square-mcp-server).
+
+  ## Features
+  - **Payment Ecosystem**: Complete payment processing including Apple Pay, cards, checkouts, refunds, and payouts
+  - **Customer & Loyalty**: Customer management, segmentation, groups, loyalty programs, and custom attributes
+  - **Catalog & Inventory**: Product catalogs, inventory tracking, categories, and item management
+  - **Order Management**: Order processing, custom attributes, and comprehensive order lifecycle
+  - **Business Operations**: Locations, merchants, team management, labor tracking, and workforce tools
+  - **Point of Sale**: Cash drawers, Square devices, Terminal management, and in-person transactions
+  - **Bookings & Appointments**: Appointment scheduling, booking management, and custom booking attributes
+  - **Gift Cards & Subscriptions**: Gift card activities, subscription management, and recurring billing
+  - **Financial Management**: Bank accounts, dispute handling, invoice management, and vendor relations
+  - **Integration Tools**: Webhooks, OAuth authentication, Square Online sites, and code snippets
+  - **AI-Powered Access**: Natural language interface to 25+ Square API services through unified tools
+
+  ## What you'll need to connect
+
+  **No Setup Required**: Authentication is handled automatically through OAuth workflow.
+
+  ## Known Issues
+
+  GPT-4.1 is generally not able to format its API requests correctly when calling the `make_api_request` tool.
+  Claude Sonnet 4 works better.
+
+metadata:
+  categories: Business
+icon: https://avatars.githubusercontent.com/u/82592?s=200&v=4
+repoURL: https://github.com/square/square-mcp-server
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.squareup.com/mcp
+
+toolPreview:
+  - name: make_api_request
+    description: Unified tool for all Square API operations covering 25+ services including customers, orders, payments, inventory, and more
+    params:
+      method: HTTP method for the API request
+      service: Square API service (customers, orders, payments, catalog, inventory, etc.)
+      request: Request object with parameters for the API call (optional)
+  - name: get_type_info
+    description: Get type information for a Square API method before making requests
+    params:
+      method: The API method to get type information for
+      service: The Square API service containing the method
+  - name: get_service_info
+    description: Get information about a Square API service and its available methods
+    params:
+      service: The Square API service to get information about

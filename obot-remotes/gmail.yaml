@@ -1,0 +1,109 @@
+name: Gmail
+entryKey: obot-gmail
+serverUserType: singleUser
+shortDescription: Send, read, draft, and organize Gmail emails with label management and search
+description: |
+  ![Gmail MCP Server](https://img.shields.io/badge/Gmail-MCP%20Server-blue?style=for-the-badge&logo=gmail)
+  ![Python](https://img.shields.io/badge/Python-3.13+-green?style=for-the-badge&logo=python)
+  ![FastMCP](https://img.shields.io/badge/FastMCP-2.11.1+-orange?style=for-the-badge)
+  ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
+
+  This remote server is a [custom Obot implementation](https://github.com/obot-platform/google-mcp/tree/main/gmail), hosted and managed by Obot so you can connect through a streamlined authentication flow without navigating the usual Google Cloud project and OAuth configuration.
+
+  Obot plans to move this catalog entry to Google's official MCP server for Gmail once it leaves Developer Preview. To try Google's Developer Preview now, see [Configure the Gmail MCP server](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server).
+
+  Send, read, draft, search, and organize Gmail messages and labels.
+
+  ## Features
+  - **OAuth2 Authentication**: Secure Google OAuth integration with automatic token refresh
+  - **Complete Email Management**: Read, send, draft, and organize emails with advanced filtering
+  - **Label Management**: Create, update, and manage Gmail labels and organization
+  - **Advanced Search**: Powerful query-based email filtering and search capabilities
+  - **Attachment Support**: List and manage email attachments
+  - **Draft Management**: Create, update, send, and delete draft emails
+
+  ## What you'll need to connect
+
+  **No Setup Required**: Authentication is handled automatically through OAuth2 workflow
+
+metadata:
+  categories: Business
+  allow-multiple: "true"
+icon: https://img.icons8.com/?size=100&id=P7UIlhbpWzZm&format=png&color=000000
+repoURL: https://github.com/obot-platform/google-mcp/tree/main/gmail
+runtime: remote
+remoteConfig:
+  fixedURL: https://gmail-mcp.obot.ai/mcp
+toolPreview:
+  - name: list_emails
+    description: List emails in the user's Gmail account with advanced filtering options.
+    params:
+      max_results: "Maximum number of emails to return (1-1000, default: 100)"
+      query: Gmail search query for filtering emails
+      label_ids: Comma-separated list of label IDs to filter by
+      category: Email category filter (primary, social, promotions, updates, forums)
+      after: Date to search for emails after
+      before: Date to search for emails before
+  - name: read_email
+    description: Read a specific email by ID or subject.
+    params:
+      email_id: Email ID to read
+      email_subject: Email subject to search for
+      user_timezone: "User's timezone (default: UTC)"
+  - name: send_email
+    description: Send a new email immediately.
+    params:
+      to_emails: Comma-separated list of recipient email addresses
+      subject: Email subject
+      message: Email body content
+      cc_emails: Comma-separated list of CC recipients
+      bcc_emails: Comma-separated list of BCC recipients
+  - name: list_drafts
+    description: List all draft emails in the user's account.
+    params:
+      max_results: "Maximum number of drafts to return (1-1000, default: 100)"
+  - name: create_draft
+    description: Create a new draft email.
+    params:
+      to_emails: Comma-separated list of recipient email addresses
+      subject: Email subject
+      message: Email body content
+      cc_emails: Comma-separated list of CC recipients
+      bcc_emails: Comma-separated list of BCC recipients
+      reply_to_email_id: ID of email to reply to
+      reply_all: Whether to reply to all recipients
+  - name: send_draft
+    description: Send a draft email.
+    params:
+      draft_id: ID of the draft to send
+  - name: list_labels
+    description: List all custom labels in the user's account.
+    params:
+      label_id: Specific label ID to fetch (optional)
+  - name: create_label
+    description: Create a new custom label.
+    params:
+      label_name: Name of the label to create
+      label_list_visibility: Label list visibility (labelShow, labelHide, labelShowIfUnread)
+      message_list_visibility: Message list visibility (show, hide)
+  - name: modify_message_labels
+    description: Modify labels and properties of an email message.
+    params:
+      email_id: ID of the email message
+      add_label_ids: List of label IDs to add
+      remove_label_ids: List of label IDs to remove
+      archive: Whether to archive the message
+      mark_as_read: Whether to mark as read
+      mark_as_starred: Whether to mark as starred
+      mark_as_important: Whether to mark as important
+      apply_action_to_thread: Apply action to entire thread
+  - name: delete_email
+    description: Delete an email message.
+    params:
+      email_id: ID of the email to delete
+  - name: list_attachments
+    description: List all attachments in an email.
+    params:
+      email_id: ID of the email to check for attachments
+  - name: get_current_email_address
+    description: Get the current user's email address.

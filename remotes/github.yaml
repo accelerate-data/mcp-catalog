@@ -1,0 +1,388 @@
+name: GitHub
+entryKey: obot-github
+serverUserType: multiUser
+shortDescription: Manage GitHub repositories, issues, PRs, workflows, and CI/CD operations
+upgradeNote: |
+  This entry now requires selecting a GitHub-hosted MCP endpoint path so each connection can use a specific toolset and access mode.
+
+  - **Configuration review required:** Existing connections may need to reconnect and select an endpoint path. Select `/` to preserve the previous default behavior.
+  - **New options:** Choose a focused toolset or all tools, with standard and read-only variants for each endpoint.
+  - **Authentication unchanged:** Continue using a GitHub Personal Access Token with the permissions required by the selected tools.
+description: |
+  Manage GitHub repositories, issues, pull requests, workflows, and more through [GitHub's hosted MCP server](https://github.com/github/github-mcp-server), with no local runtime required and additional remote-only tools.
+
+  ## Features
+  - **Repository Management**: Browse and query code, search files, analyze commits, and understand project structure
+  - **Issue & PR Automation**: Create, update, and manage issues and pull requests with AI assistance
+  - **CI/CD & Workflow Intelligence**: Monitor GitHub Actions workflow runs, analyze build failures, and manage releases
+  - **Code Analysis**: Examine security findings, review Dependabot alerts, and get comprehensive codebase insights
+  - **Team Collaboration**: Access discussions, manage notifications, and streamline team processes
+  - **Copilot Integration**: Perform tasks with GitHub Copilot coding agent (exclusive to remote server)
+  - **Modular Toolsets**: Mix and match specific GitHub functionality toolsets for your use case
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **Personal Access Token**: GitHub Personal Access Token with appropriate repository permissions
+  - **GitHub MCP Endpoint Path**: Select the toolset and access mode for this connection
+
+  See the [official remote GitHub MCP server documentation](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) for the current toolset reference and configuration details.
+
+  ## GitHub MCP Endpoint Path
+
+  All paths are appended to the fixed base URL `https://api.githubcopilot.com/mcp`. Current Obot versions display the valid paths in a dropdown. On older Obot versions that display a text field instead, enter one of the paths below exactly as shown. Choose a read-only path to prevent the server from offering tools that modify repositories, issues, pull requests, or other GitHub resources.
+
+  | Toolset | Description | Standard path | Read-only path |
+  |---------|-------------|--------------|---------------|
+  | **Default** | GitHub's default `context`, `issues`, `pull_requests`, `repos`, and `users` toolsets | `/` | `/readonly` |
+  | **All** | All available GitHub MCP tools | `/x/all` | `/x/all/readonly` |
+  | **Actions** | GitHub Actions workflows and CI/CD operations | `/x/actions` | `/x/actions/readonly` |
+  | **Code Quality** | GitHub Code Quality findings | `/x/code_quality` | `/x/code_quality/readonly` |
+  | **Code Security** | Code scanning and other code-security tools | `/x/code_security` | `/x/code_security/readonly` |
+  | **Copilot** | GitHub Copilot coding-agent tools | `/x/copilot` | `/x/copilot/readonly` |
+  | **Copilot Issue Intents** | Opt-in Copilot issue-assignment tools with intent metadata | `/x/copilot_issue_intents` | `/x/copilot_issue_intents/readonly` |
+  | **Dependabot** | Dependabot alerts and dependency tools | `/x/dependabot` | `/x/dependabot/readonly` |
+  | **Discussions** | GitHub Discussions | `/x/discussions` | `/x/discussions/readonly` |
+  | **Gists** | GitHub Gists | `/x/gists` | `/x/gists/readonly` |
+  | **Git** | Low-level Git data operations | `/x/git` | `/x/git/readonly` |
+  | **Issues** | GitHub Issues | `/x/issues` | `/x/issues/readonly` |
+  | **Labels** | GitHub Labels | `/x/labels` | `/x/labels/readonly` |
+  | **Notifications** | GitHub Notifications | `/x/notifications` | `/x/notifications/readonly` |
+  | **Organizations** | GitHub Organizations | `/x/orgs` | `/x/orgs/readonly` |
+  | **Projects** | GitHub Projects | `/x/projects` | `/x/projects/readonly` |
+  | **Pull Requests** | GitHub Pull Requests | `/x/pull_requests` | `/x/pull_requests/readonly` |
+  | **Repositories** | Repository and code operations | `/x/repos` | `/x/repos/readonly` |
+  | **Secret Protection** | Secret scanning and protection tools | `/x/secret_protection` | `/x/secret_protection/readonly` |
+  | **Security Advisories** | Repository and global security advisories | `/x/security_advisories` | `/x/security_advisories/readonly` |
+  | **Stargazers** | Repository stargazer information | `/x/stargazers` | `/x/stargazers/readonly` |
+  | **Users** | GitHub user profiles and related operations | `/x/users` | `/x/users/readonly` |
+  | **Copilot Spaces** | Remote-only GitHub Copilot Spaces tools | `/x/copilot_spaces` | `/x/copilot_spaces/readonly` |
+  | **GitHub Support Docs Search** | Remote-only GitHub product and support documentation search | `/x/github_support_docs_search` | `/x/github_support_docs_search/readonly` |
+
+  > **⚠️ Upgrade notice**
+  >
+  > This entry now requires selecting a GitHub-hosted MCP endpoint path. Existing connections may need to reconnect and select a path; select `/` to preserve the previous default behavior. Authentication still uses your GitHub Personal Access Token.
+
+toolPreview:
+  - name: add_comment_to_pending_review
+    description: Add review comment to the requester's latest pending pull request review
+    params:
+      body: The text of the review comment
+      owner: Repository owner
+      path: The relative path to the file that necessitates a comment
+      pullNumber: Pull request number
+      repo: Repository name
+      subjectType: The level at which the comment is targeted
+      line: The line of the blob in the pull request diff that the comment applies to (optional)
+      side: The side of the diff to comment on (optional)
+      startLine: For multi-line comments, the first line of the range (optional)
+      startSide: For multi-line comments, the starting side of the diff (optional)
+  - name: add_issue_comment
+    description: Add a comment to a specific issue in a GitHub repository
+    params:
+      body: Comment content
+      issue_number: Issue number to comment on
+      owner: Repository owner
+      repo: Repository name
+  - name: add_sub_issue
+    description: Add a sub-issue to a parent issue in a GitHub repository
+    params:
+      issue_number: The number of the parent issue
+      owner: Repository owner
+      repo: Repository name
+      sub_issue_id: The ID of the sub-issue to add
+      replace_parent: When true, replaces the sub-issue's current parent issue (optional)
+  - name: assign_copilot_to_issue
+    description: Assign Copilot to a specific issue in a GitHub repository
+    params:
+      issueNumber: Issue number
+      owner: Repository owner
+      repo: Repository name
+  - name: cancel_workflow_run
+    description: Cancel a workflow run
+    params:
+      owner: Repository owner
+      repo: Repository name
+      run_id: The unique identifier of the workflow run
+  - name: create_and_submit_pull_request_review
+    description: Create and submit a review for a pull request without review comments
+    params:
+      body: Review comment text
+      event: Review action to perform
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+      commitID: SHA of commit to review (optional)
+  - name: create_branch
+    description: Create a new branch in a GitHub repository
+    params:
+      branch: Name for new branch
+      owner: Repository owner
+      repo: Repository name
+      from_branch: Source branch (defaults to repo default) (optional)
+  - name: create_gist
+    description: Create a new gist
+    params:
+      content: Gist content
+      filename: Gist filename
+      description: Gist description (optional)
+      public: Whether gist should be public (optional)
+  - name: create_issue
+    description: Create a new issue in a GitHub repository
+    params:
+      owner: Repository owner
+      repo: Repository name
+      title: Issue title
+      assignees: Usernames to assign to this issue (optional)
+      body: Issue body content (optional)
+      labels: Labels to apply to this issue (optional)
+      milestone: Milestone number (optional)
+  - name: create_or_update_file
+    description: Create or update a single file in a GitHub repository
+    params:
+      branch: Branch to create/update the file in
+      content: Content of the file
+      message: Commit message
+      owner: Repository owner (username or organization)
+      path: Path where to create/update the file
+      repo: Repository name
+      sha: Required if updating an existing file. The blob SHA of the file being replaced (optional)
+  - name: create_pending_pull_request_review
+    description: Create a pending review for a pull request
+    params:
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+      commitID: SHA of commit to review (optional)
+  - name: create_pull_request
+    description: Create a new pull request in a GitHub repository
+    params:
+      base: Branch to merge into
+      head: Branch containing changes
+      owner: Repository owner
+      repo: Repository name
+      title: PR title
+      body: PR description (optional)
+      draft: Create as draft PR (optional)
+      maintainer_can_modify: Allow maintainer edits (optional)
+  - name: create_pull_request_with_copilot
+    description: Delegate a task to GitHub Copilot coding agent to perform in the background
+    params:
+      owner: Repository owner
+      problem_statement: Detailed description of the task to be performed
+      repo: Repository name
+      title: Title for the pull request that will be created
+      base_ref: Git reference (e.g., branch) that the agent will start its work from (optional)
+  - name: create_repository
+    description: Create a new GitHub repository in your account
+    params:
+      name: Repository name
+      autoInit: Initialize with README (optional)
+      description: Repository description (optional)
+      private: Whether repo should be private (optional)
+  - name: delete_file
+    description: Delete a file from a GitHub repository
+    params:
+      branch: Branch to delete the file from
+      message: Commit message
+      owner: Repository owner (username or organization)
+      path: Path to the file to delete
+      repo: Repository name
+  - name: delete_pending_pull_request_review
+    description: Delete the requester's latest pending pull request review
+    params:
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+  - name: delete_workflow_run_logs
+    description: Delete logs for a workflow run
+    params:
+      owner: Repository owner
+      repo: Repository name
+      run_id: The unique identifier of the workflow run
+  - name: dismiss_notification
+    description: Dismiss a notification by marking it as read or done
+    params:
+      threadID: The ID of the notification thread
+      state: The new state of the notification (read/done) (optional)
+  - name: download_workflow_run_artifact
+    description: Get download URL for a workflow run artifact
+    params:
+      artifact_id: The unique identifier of the artifact
+      owner: Repository owner
+      repo: Repository name
+  - name: fork_repository
+    description: Fork a GitHub repository to your account or specified organization
+    params:
+      owner: Repository owner
+      repo: Repository name
+      organization: Organization to fork to (optional)
+
+
+metadata:
+  categories: Developer Tools
+  unsupportedTools: create_or_update_file,push_files
+icon: https://avatars.githubusercontent.com/u/9919?v=4
+repoURL: https://github.com/github/github-mcp-server
+
+env:
+- name: GitHub MCP Endpoint Path
+  key: GITHUB_MCP_PATH
+  description: Select an endpoint path from the entry description. On older Obot versions, enter one of those paths exactly as shown.
+  required: true
+  sensitive: false
+  options:
+  - name: Default
+    value: /
+    description: GitHub's default context, issues, pull requests, repositories, and users toolsets.
+  - name: Default (read-only)
+    value: /readonly
+    description: GitHub's default toolsets without tools that modify GitHub resources.
+  - name: All
+    value: /x/all
+    description: All available GitHub MCP tools.
+  - name: All (read-only)
+    value: /x/all/readonly
+    description: All available read-only GitHub MCP tools.
+  - name: Actions
+    value: /x/actions
+    description: GitHub Actions workflows and CI/CD operations.
+  - name: Actions (read-only)
+    value: /x/actions/readonly
+    description: Read GitHub Actions workflows and CI/CD information without modifying them.
+  - name: Code Quality
+    value: /x/code_quality
+    description: GitHub Code Quality findings.
+  - name: Code Quality (read-only)
+    value: /x/code_quality/readonly
+    description: Read GitHub Code Quality findings without modifying GitHub resources.
+  - name: Code Security
+    value: /x/code_security
+    description: Code scanning and other code-security tools.
+  - name: Code Security (read-only)
+    value: /x/code_security/readonly
+    description: Read code-security information without modifying GitHub resources.
+  - name: Copilot
+    value: /x/copilot
+    description: GitHub Copilot coding-agent tools available on the remote server.
+  - name: Copilot (read-only)
+    value: /x/copilot/readonly
+    description: Read-only GitHub Copilot tool access.
+  - name: Copilot Issue Intents
+    value: /x/copilot_issue_intents
+    description: Opt-in Copilot issue-assignment tools with intent metadata.
+  - name: Copilot Issue Intents (read-only)
+    value: /x/copilot_issue_intents/readonly
+    description: Read-only access to Copilot issue-intent tools.
+  - name: Dependabot
+    value: /x/dependabot
+    description: Dependabot alerts and dependency tools.
+  - name: Dependabot (read-only)
+    value: /x/dependabot/readonly
+    description: Read Dependabot alerts and dependency information without modifying them.
+  - name: Discussions
+    value: /x/discussions
+    description: GitHub Discussions tools.
+  - name: Discussions (read-only)
+    value: /x/discussions/readonly
+    description: Read GitHub Discussions without modifying them.
+  - name: Gists
+    value: /x/gists
+    description: GitHub Gist tools.
+  - name: Gists (read-only)
+    value: /x/gists/readonly
+    description: Read GitHub Gists without modifying them.
+  - name: Git
+    value: /x/git
+    description: Low-level Git data operations.
+  - name: Git (read-only)
+    value: /x/git/readonly
+    description: Read low-level Git data without modifying repositories.
+  - name: Issues
+    value: /x/issues
+    description: GitHub Issues tools.
+  - name: Issues (read-only)
+    value: /x/issues/readonly
+    description: Read GitHub Issues without modifying them.
+  - name: Labels
+    value: /x/labels
+    description: GitHub Labels tools.
+  - name: Labels (read-only)
+    value: /x/labels/readonly
+    description: Read GitHub Labels without modifying them.
+  - name: Notifications
+    value: /x/notifications
+    description: GitHub Notifications tools.
+  - name: Notifications (read-only)
+    value: /x/notifications/readonly
+    description: Read GitHub Notifications without changing their state.
+  - name: Organizations
+    value: /x/orgs
+    description: GitHub Organization tools.
+  - name: Organizations (read-only)
+    value: /x/orgs/readonly
+    description: Read GitHub Organization information without modifying it.
+  - name: Projects
+    value: /x/projects
+    description: GitHub Projects tools.
+  - name: Projects (read-only)
+    value: /x/projects/readonly
+    description: Read GitHub Projects without modifying them.
+  - name: Pull Requests
+    value: /x/pull_requests
+    description: GitHub Pull Request tools.
+  - name: Pull Requests (read-only)
+    value: /x/pull_requests/readonly
+    description: Read GitHub Pull Requests without modifying them.
+  - name: Repositories
+    value: /x/repos
+    description: Repository and code operations.
+  - name: Repositories (read-only)
+    value: /x/repos/readonly
+    description: Read repositories and code without modifying them.
+  - name: Secret Protection
+    value: /x/secret_protection
+    description: Secret scanning and protection tools.
+  - name: Secret Protection (read-only)
+    value: /x/secret_protection/readonly
+    description: Read secret-protection information without modifying GitHub resources.
+  - name: Security Advisories
+    value: /x/security_advisories
+    description: Repository and global security-advisory tools.
+  - name: Security Advisories (read-only)
+    value: /x/security_advisories/readonly
+    description: Read security advisories without modifying GitHub resources.
+  - name: Stargazers
+    value: /x/stargazers
+    description: Repository stargazer information.
+  - name: Stargazers (read-only)
+    value: /x/stargazers/readonly
+    description: Read repository stargazer information.
+  - name: Users
+    value: /x/users
+    description: GitHub user profiles and related operations.
+  - name: Users (read-only)
+    value: /x/users/readonly
+    description: Read GitHub user information without modifying it.
+  - name: Copilot Spaces
+    value: /x/copilot_spaces
+    description: Remote-only GitHub Copilot Spaces tools.
+  - name: Copilot Spaces (read-only)
+    value: /x/copilot_spaces/readonly
+    description: Read-only access to GitHub Copilot Spaces tools.
+  - name: GitHub Support Docs Search
+    value: /x/github_support_docs_search
+    description: Search GitHub product and support documentation using the remote-only toolset.
+  - name: GitHub Support Docs Search (read-only)
+    value: /x/github_support_docs_search/readonly
+    description: Read-only GitHub product and support documentation search.
+
+runtime: remote
+remoteConfig:
+  urlTemplate: https://api.githubcopilot.com/mcp${GITHUB_MCP_PATH}
+  headers:
+  - name: Personal Access Token
+    description: GitHub PAT
+    key: Authorization
+    required: true
+    sensitive: true

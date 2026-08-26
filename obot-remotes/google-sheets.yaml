@@ -1,0 +1,94 @@
+name: Google Sheets
+entryKey: obot-google-sheets
+serverUserType: singleUser
+shortDescription: Create and manage Google Sheets spreadsheets, worksheets, cells, and formulas
+description: |
+  ![Google Sheets MCP Server](https://img.shields.io/badge/Google%20Sheets-MCP%20Server-blue?style=for-the-badge&logo=google-sheets)
+  ![Python](https://img.shields.io/badge/Python-3.13+-green?style=for-the-badge&logo=python)
+  ![FastMCP](https://img.shields.io/badge/FastMCP-2.11.1+-orange?style=for-the-badge)
+  ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
+
+  This remote server is a [custom Obot implementation](https://github.com/obot-platform/google-mcp/tree/main/sheets), hosted and managed by Obot so you can connect through a streamlined authentication flow without navigating the usual Google Cloud project and OAuth configuration.
+
+  Obot plans to move this catalog entry to Google's official MCP server for Google Sheets once it leaves Developer Preview. To try Google's Developer Preview now, see [Configure the Sheets MCP server](https://developers.google.com/workspace/sheets/api/guides/configure-mcp-server).
+
+  Create and manage Google Sheets spreadsheets, worksheets, cells, and formulas.
+
+  ## Features
+  - **OAuth2 Authentication**: Secure Google OAuth integration with automatic token refresh
+  - **Spreadsheet Management**: Create, read, and delete spreadsheets with full lifecycle control
+  - **Worksheet Operations**: Create and manage individual worksheets (tabs) within spreadsheets
+  - **Cell Operations**: Update individual cells and ranges with values and formulas
+  - **Formula Support**: Apply formula templates with dynamic placeholders across ranges
+  - **Data Management**: Append rows and clear ranges with automatic sheet expansion
+  - **Table Reading**: Read spreadsheet data as structured tables or raw cell values
+
+  ## What you'll need to connect
+
+  **No Setup Required**: Authentication is handled automatically through OAuth2 workflow
+
+metadata:
+  categories: Business
+  allow-multiple: "true"
+icon: https://img.icons8.com/?size=100&id=qrAVeBIrsjod&format=png&color=000000
+repoURL: https://github.com/obot-platform/google-mcp/tree/main/sheets
+runtime: remote
+remoteConfig:
+  fixedURL: https://google-sheets-mcp.obot.ai/mcp
+toolPreview:
+  - name: list_spreadsheets
+    description: List spreadsheets (both owned and shared) in the user's Google Drive.
+    params:
+      max_results: "Maximum number of results to return (1-100, default: 10)"
+      page_token: Token for pagination, pass the nextPageToken from the previous response to get the next page
+  - name: create_spreadsheet
+    description: Create a new spreadsheet in the user's personal Google Drive.
+    params:
+      spreadsheet_name: The name of the spreadsheet to create
+  - name: delete_spreadsheet
+    description: Delete a spreadsheet by its ID. Only valid for spreadsheets owned by the user.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to delete
+  - name: list_worksheets
+    description: List all worksheets (tabs) in a specific spreadsheet.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to list worksheets from
+  - name: create_worksheet
+    description: Create a new worksheet (tab) in an existing spreadsheet.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to create a worksheet in
+      worksheet_name: The name of the new worksheet
+      rows: "Number of rows for the new worksheet (1-1000, default: 100)"
+      cols: "Number of columns for the new worksheet (1-100, default: 26)"
+  - name: read_spreadsheet
+    description: Read a spreadsheet by its ID.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to read
+      worksheet_name: The name of the worksheet to read. If not provided, the first worksheet will be read
+      cell_range: The range of cells of the worksheet to read
+      read_tables: "Whether to read the spreadsheet as tables. Cell ranges are not supported when reading tables (default: false)"
+  - name: update_cells
+    description: Update cells in a spreadsheet. If the cell is out of bounds, the sheet will be automatically expanded.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to update
+      cells_to_update: "List of cells to update. Each item specifies a cell address (A1 notation) and its new value"
+      worksheet_name: The name of the worksheet to update. If not provided, the first worksheet will be updated
+  - name: update_range_with_formula
+    description: Efficiently fills a range of cells with formula templates.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to update
+      target_range: "Range to fill with formulas in A1 notation (e.g., 'D2:D100', 'A5:Z5')"
+      formula_template: "Formula template with placeholders: {row} for row number, {col} for column letter"
+      worksheet_name: The name of the worksheet to update. If not provided, the first worksheet will be updated
+  - name: append_row
+    description: Append a new row to the end of existing data in a spreadsheet.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to append to
+      row_values: "Values to append as a new row. Each value will be placed in sequential columns (A, B, C, etc.)"
+      worksheet_name: The name of the worksheet to append to. If not provided, the first worksheet will be appended to
+  - name: clear_range
+    description: Clear content from a range of cells in a spreadsheet. Removes values but preserves formatting.
+    params:
+      spreadsheet_id: The ID of the spreadsheet to clear data from
+      cell_range: "Range of cells to clear in A1 notation (e.g., 'A1:C10', 'D2:D100')"
+      worksheet_name: The name of the worksheet to clear data from. If not provided, the first worksheet will be used

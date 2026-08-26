@@ -1,0 +1,239 @@
+name: GitHub Enterprise
+entryKey: obot-github-enterprise
+serverUserType: singleUser
+shortDescription: Connect AI tools to GitHub Enterprise Server
+description: |
+  Connect AI tools to GitHub Enterprise Server with a containerized MCP server. GitHub does not provide a hosted remote MCP endpoint for GitHub Enterprise Server.
+
+  [Read the official GitHub Enterprise MCP server documentation](https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/provide-context/use-mcp-in-your-ide/enterprise-configuration).
+
+  This server is appropriate for connecting to self-hosted instances of GitHub Enterprise Server. If you're using GitHub Enterprise Cloud with data residency (`*.ghe.com`), we recommend using the **GitHub Enterprise Cloud** MCP server. For standard GitHub Enterprise Cloud on `github.com`, use the regular **GitHub** catalog entry.
+
+  This MCP server connects AI tools directly to GitHub Enterprise Server. It gives AI agents, assistants, and chatbots the ability to read repositories and code files, manage issues and PRs, analyze code, and automate workflows through natural language interactions.
+
+  ## Features
+  - **Repository Management**: Browse and query code, search files, analyze commits, and understand project structure
+  - **Issue & PR Automation**: Create, update, and manage issues and pull requests with AI assistance
+  - **CI/CD & Workflow Intelligence**: Monitor GitHub Actions workflow runs, analyze build failures, and manage releases
+  - **Code Analysis**: Examine security findings, review Dependabot alerts, and understand code patterns
+  - **Team Collaboration**: Access discussions, manage notifications, and streamline team processes
+  - **Modular Toolsets**: Enable or disable specific groups of functionality via configuration
+  - **Dynamic Tool Discovery**: Turn on toolsets in response to user prompts (beta)
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **GitHub Personal Access Token**: GitHub Personal Access Token with appropriate repository permissions
+
+  **Optional:**
+  - **GitHub Toolsets**: Comma-separated list of enabled GitHub toolsets (e.g., repos,issues,pull_requests). Defaults to all
+  - **Dynamic Toolsets**: Set to 1 to enable dynamic tool discovery (beta feature)
+  - **GitHub Enterprise Host**: For GitHub Enterprise Server or Enterprise Cloud with data residency
+
+  ## Available Toolsets
+
+  The following toolsets are available (all enabled by default):
+
+  | Toolset | Description |
+  |---------|-------------|
+  | **context** | **Strongly recommended**: Tools that provide context about the current user and GitHub context |
+  | **actions** | GitHub Actions workflows and CI/CD operations |
+  | **code_security** | Code security related tools, such as GitHub Code Scanning |
+  | **dependabot** | Dependabot tools |
+  | **discussions** | GitHub Discussions related tools |
+  | **experiments** | Experimental features that are not considered stable yet |
+  | **issues** | GitHub Issues related tools |
+  | **notifications** | GitHub Notifications related tools |
+  | **orgs** | GitHub Organization related tools |
+  | **pull_requests** | GitHub Pull Request related tools |
+  | **repos** | GitHub Repository related tools |
+  | **secret_protection** | Secret protection related tools, such as GitHub Secret Scanning |
+  | **users** | GitHub User related tools |
+
+toolPreview:
+  - name: add_comment_to_pending_review
+    description: Add review comment to the requester's latest pending pull request review
+    params:
+      body: The text of the review comment
+      owner: Repository owner
+      path: The relative path to the file that necessitates a comment
+      pullNumber: Pull request number
+      repo: Repository name
+      subjectType: The level at which the comment is targeted
+      line: The line of the blob in the pull request diff that the comment applies to (optional)
+      side: The side of the diff to comment on (optional)
+      startLine: For multi-line comments, the first line of the range (optional)
+      startSide: For multi-line comments, the starting side of the diff (optional)
+  - name: add_issue_comment
+    description: Add a comment to a specific issue in a GitHub repository
+    params:
+      body: Comment content
+      issue_number: Issue number to comment on
+      owner: Repository owner
+      repo: Repository name
+  - name: add_sub_issue
+    description: Add a sub-issue to a parent issue in a GitHub repository
+    params:
+      issue_number: The number of the parent issue
+      owner: Repository owner
+      repo: Repository name
+      sub_issue_id: The ID of the sub-issue to add
+      replace_parent: When true, replaces the sub-issue's current parent issue (optional)
+  - name: assign_copilot_to_issue
+    description: Assign Copilot to a specific issue in a GitHub repository
+    params:
+      issueNumber: Issue number
+      owner: Repository owner
+      repo: Repository name
+  - name: cancel_workflow_run
+    description: Cancel a workflow run
+    params:
+      owner: Repository owner
+      repo: Repository name
+      run_id: The unique identifier of the workflow run
+  - name: create_and_submit_pull_request_review
+    description: Create and submit a review for a pull request without review comments
+    params:
+      body: Review comment text
+      event: Review action to perform
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+      commitID: SHA of commit to review (optional)
+  - name: create_branch
+    description: Create a new branch in a GitHub repository
+    params:
+      branch: Name for new branch
+      owner: Repository owner
+      repo: Repository name
+      from_branch: Source branch (defaults to repo default) (optional)
+  - name: create_gist
+    description: Create a new gist
+    params:
+      content: Gist content
+      filename: Gist filename
+      description: Gist description (optional)
+      public: Whether gist should be public (optional)
+  - name: create_issue
+    description: Create a new issue in a GitHub repository
+    params:
+      owner: Repository owner
+      repo: Repository name
+      title: Issue title
+      assignees: Usernames to assign to this issue (optional)
+      body: Issue body content (optional)
+      labels: Labels to apply to this issue (optional)
+      milestone: Milestone number (optional)
+  - name: create_or_update_file
+    description: Create or update a single file in a GitHub repository
+    params:
+      branch: Branch to create/update the file in
+      content: Content of the file
+      message: Commit message
+      owner: Repository owner (username or organization)
+      path: Path where to create/update the file
+      repo: Repository name
+      sha: Required if updating an existing file. The blob SHA of the file being replaced (optional)
+  - name: create_pending_pull_request_review
+    description: Create a pending review for a pull request
+    params:
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+      commitID: SHA of commit to review (optional)
+  - name: create_pull_request
+    description: Create a new pull request in a GitHub repository
+    params:
+      base: Branch to merge into
+      head: Branch containing changes
+      owner: Repository owner
+      repo: Repository name
+      title: PR title
+      body: PR description (optional)
+      draft: Create as draft PR (optional)
+      maintainer_can_modify: Allow maintainer edits (optional)
+  - name: create_pull_request_with_copilot
+    description: Delegate a task to GitHub Copilot coding agent to perform in the background
+    params:
+      owner: Repository owner
+      problem_statement: Detailed description of the task to be performed
+      repo: Repository name
+      title: Title for the pull request that will be created
+      base_ref: Git reference (e.g., branch) that the agent will start its work from (optional)
+  - name: create_repository
+    description: Create a new GitHub repository in your account
+    params:
+      name: Repository name
+      autoInit: Initialize with README (optional)
+      description: Repository description (optional)
+      private: Whether repo should be private (optional)
+  - name: delete_file
+    description: Delete a file from a GitHub repository
+    params:
+      branch: Branch to delete the file from
+      message: Commit message
+      owner: Repository owner (username or organization)
+      path: Path to the file to delete
+      repo: Repository name
+  - name: delete_pending_pull_request_review
+    description: Delete the requester's latest pending pull request review
+    params:
+      owner: Repository owner
+      pullNumber: Pull request number
+      repo: Repository name
+  - name: delete_workflow_run_logs
+    description: Delete logs for a workflow run
+    params:
+      owner: Repository owner
+      repo: Repository name
+      run_id: The unique identifier of the workflow run
+  - name: dismiss_notification
+    description: Dismiss a notification by marking it as read or done
+    params:
+      threadID: The ID of the notification thread
+      state: The new state of the notification (read/done) (optional)
+  - name: download_workflow_run_artifact
+    description: Get download URL for a workflow run artifact
+    params:
+      artifact_id: The unique identifier of the artifact
+      owner: Repository owner
+      repo: Repository name
+  - name: fork_repository
+    description: Fork a GitHub repository to your account or specified organization
+    params:
+      owner: Repository owner
+      repo: Repository name
+      organization: Organization to fork to (optional)
+
+metadata:
+  categories: Developer Tools
+  unsupportedTools: create_or_update_file,push_files
+icon: https://avatars.githubusercontent.com/u/9919?v=4
+repoURL: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/provide-context/use-mcp-in-your-ide/enterprise-configuration
+env:
+  - key: GITHUB_PERSONAL_ACCESS_TOKEN
+    name: GitHub Personal Access Token
+    required: true
+    sensitive: true
+    description: GitHub Personal Access Token used to authenticate with the GitHub API. Required for all GitHub operations.
+  - key: GITHUB_TOOLSETS
+    name: GitHub Toolsets
+    required: false
+    sensitive: false
+    description: Comma-separated list of enabled GitHub toolsets (e.g. repos,issues,pull_requests,code_security,experiments,all). Optional, defaults to all.
+  - key: GITHUB_DYNAMIC_TOOLSETS
+    name: GitHub Dynamic Toolsets
+    required: false
+    sensitive: false
+    description: Set to 1 to enable dynamic tool discovery. Optional.
+  - key: GITHUB_HOST
+    name: GitHub Enterprise Host
+    required: false
+    sensitive: false
+    description: GitHub Enterprise Server hostname (e.g. https://ghes.example.com). Optional, for GitHub Enterprise integration.
+
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/github:latest
+  path: "/"
+  port: 8099

@@ -1,0 +1,88 @@
+name: AWS Kendra
+entryKey: obot-aws-kendra
+serverUserType: singleUser
+shortDescription: Query Amazon Kendra indices for enhanced RAG context in AI applications
+description: 'Query Amazon Kendra indices as additional RAG context for chatbots and coding assistants.
+
+
+  ## Features
+
+  - Enhance your existing MCP-enabled ChatBot with additional RAG indices
+
+  - Enhance the responses from coding assistants such as Cline, Cursor, Windsurf, Amazon Q Developer, etc.
+
+
+  ## What you''ll need to connect
+
+
+  **Required AWS Credentials:**
+
+  - **AWS Access Key ID**: Your AWS credential access key
+
+  - **AWS Secret Access Key**: Your AWS credential access secret
+
+
+  **Optional Configuration:**
+
+  - **AWS Region**: AWS region to use (default: `us-east-1`)
+
+  - **AWS Session Token**: Required only for temporary credentials like SSO or STS AssumeRole
+
+
+  **Prerequisites:**
+
+  - An AWS account
+
+  - An existing Amazon Kendra Index with your RAG documentation
+
+
+  **IAM Permissions Required:**
+
+  - `kendra:Query` and `kendra:ListIndices` permissions (minimum)
+
+  - Alternatively, use the AWS Managed `AmazonKendraFullAccess` policy
+
+  '
+metadata:
+  categories: Retrieval & Search, SaaS & API Integrations
+icon: https://avatars.githubusercontent.com/u/3299148?s=48&v=4
+repoURL: https://github.com/awslabs/mcp/tree/main/src/amazon-kendra-index-mcp-server
+env:
+- key: AWS_ACCESS_KEY_ID
+  name: AWS Access Key ID
+  required: true
+  sensitive: true
+  description: Your AWS Access Key ID
+- key: AWS_SECRET_ACCESS_KEY
+  name: AWS Secret Access Key
+  required: true
+  sensitive: true
+  description: AWS Secret Access Key
+- key: AWS_SESSION_TOKEN
+  name: AWS Session Token
+  required: false
+  sensitive: true
+  description: AWS Session Token, only required if using temporary credentials such as temporary AWS credentials, such as those obtained through aws sso login or other temporary access methods (for example, STS AssumeRole)
+- key: AWS_REGION
+  name: AWS Region
+  required: false
+  sensitive: false
+  description: AWS Region, default to us-east-1
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/aws-kendra:1.0.15
+  port: 8099
+  path: /
+  args:
+  - awslabs.amazon-kendra-index-mcp-server
+toolPreview:
+- name: KendraQueryTool
+  description: Query Amazon Kendra and retrieve content from the response.
+  params:
+    query: The search query to send to Amazon Kendra
+    region: The region of the Kendra Index to send the search query to
+    indexId: The indexId of the Kendra index to send the search query to
+- name: KendraListIndexesTool
+  description: List all Amazon Kendra indexes in the specified region.
+  params:
+    region: The AWS region to list Kendra indexes from

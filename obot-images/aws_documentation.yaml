@@ -1,0 +1,105 @@
+name: AWS Documentation
+entryKey: obot-aws-documentation
+serverUserType: singleUser
+shortDescription: Access, search, and get recommendations from AWS documentation
+description: '![AWS Documentation MCP Demo](https://github.com/awslabs/mcp/blob/main/src/aws-documentation-mcp-server/basic-usage.gif?raw=true)
+
+
+  Access, search, and get recommendations from AWS documentation with tools to fetch content, search globally, and discover related resources.
+
+
+  ## Features
+
+  - **Read Documentation**: Fetch and convert AWS documentation pages to markdown format
+
+  - **Search Documentation**: Search AWS documentation using the official search API (global only)
+
+  - **Recommendations**: Get content recommendations for AWS documentation pages (global only)
+
+  - **Get Available Services List**: Get a list of available AWS services in China regions (China only)
+
+
+  ## What you''ll need to connect
+
+
+  **Required AWS Credentials:**
+
+  - **AWS Access Key ID**: Your AWS credential access key
+
+  - **AWS Secret Access Key**: Your AWS credential access secret
+
+
+  **Optional Configuration:**
+
+  - **AWS Region**: AWS region to use (default: `us-east-1`)
+
+  - **AWS Session Token**: Required only for temporary credentials like SSO or STS AssumeRole
+
+
+  ## Basic Usage
+
+
+  Example:
+
+
+  - "look up documentation on S3 bucket naming rule. cite your sources"
+
+  - "recommend content for page https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html"
+
+  '
+metadata:
+  categories: Documentation & Learning, SaaS & API Integrations
+icon: https://avatars.githubusercontent.com/u/3299148?s=48&v=4
+repoURL: https://github.com/awslabs/mcp/tree/main/src/aws-documentation-mcp-server
+env:
+- key: AWS_ACCESS_KEY_ID
+  name: AWS Access Key ID
+  required: true
+  sensitive: true
+  description: Your AWS Access Key ID
+- key: AWS_SECRET_ACCESS_KEY
+  name: AWS Secret Access Key
+  required: true
+  sensitive: true
+  description: AWS Secret Access Key
+- key: AWS_SESSION_TOKEN
+  name: AWS Session Token
+  required: false
+  sensitive: true
+  description: AWS Session Token, only required if using temporary credentials such as temporary AWS credentials, such as those obtained through aws sso login or other temporary access methods (for example, STS AssumeRole)
+- key: AWS_REGION
+  name: AWS Region
+  required: false
+  sensitive: false
+  description: AWS Region, default to us-east-1
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/aws-documentation:1.1.20
+  port: 8099
+  path: /
+  args:
+  - awslabs.aws-documentation-mcp-server
+toolPreview:
+- name: read_documentation
+  description: Fetch and convert an AWS documentation page to markdown format.
+  params:
+    url: URL of the AWS documentation page to read
+    max_length: Maximum number of characters to return.
+    start_index: On return output starting at this character index, useful if a previous fetch was truncated and more content is required.
+- name: read_sections
+  description: Extract specific sections from AWS documentation pages by title.
+  params:
+    url: URL of the AWS documentation page to read
+    section_titles: List of section titles to extract from the documentation
+- name: search_documentation
+  description: Search AWS documentation using the official AWS Documentation Search API.
+  params:
+    search_phrase: Search phrase to use
+    search_intent: 'For the search_phrase parameter, describe the search intent of the user. CRITICAL: Do not include any PII or customer data, describe only the AWS-related intent for search.'
+    limit: Maximum number of results to return
+    product_types: Filter results by AWS product/service (e.g., ["Amazon Simple Storage Service"])
+    guide_types: Filter results by guide type (e.g., ["User Guide", "API Reference", "Developer Guide"])
+- name: recommend
+  description: Get content recommendations for an AWS documentation page.
+  params:
+    url: URL of the AWS documentation page to get recommendations for

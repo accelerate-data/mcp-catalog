@@ -1,0 +1,145 @@
+name: AWS Redshift
+entryKey: obot-aws-redshift
+serverUserType: singleUser
+shortDescription: Discover, explore, and query Amazon Redshift clusters and serverless workgroups
+description: 'Discover, explore, and query Amazon Redshift clusters and serverless workgroups safely and efficiently.
+
+
+  ## Features
+
+  - **Cluster Discovery**: Automatically discover both provisioned Redshift clusters and serverless workgroups
+
+  - **Metadata Exploration**: Browse databases, schemas, tables, and columns
+
+  - **Safe Query Execution**: Execute SQL queries in READ ONLY mode (safe READ WRITE support planned for future versions)
+
+  - **Multi-Cluster Support**: Work with multiple clusters and workgroups simultaneously
+
+
+  ## What you''ll need to connect
+
+
+  **Required AWS Credentials:**
+
+  - **AWS Access Key ID**: Your AWS credential access key
+
+  - **AWS Secret Access Key**: Your AWS credential access secret
+
+
+  **Optional Configuration:**
+
+  - **AWS Region**: AWS region to use (default: `us-east-1`)
+
+  - **AWS Session Token**: Required only for temporary credentials like SSO or STS AssumeRole
+
+
+  **IAM Permissions Required:**
+
+  - `redshift:DescribeClusters`
+
+  - `redshift-serverless:ListWorkgroups`, `redshift-serverless:GetWorkgroup`
+
+  - `redshift-data:ExecuteStatement`, `redshift-data:BatchExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`
+
+
+  **Database Permissions:**
+
+  - `SELECT` permissions on tables/views you want to query
+
+  - `USAGE` permissions on schemas you want to explore
+
+  - Connection permissions to databases you want to access
+
+
+  ## Basic Usage
+
+
+  ### Discovery Workflow
+
+
+  1. **Discover Clusters**: Find available Redshift resources
+
+  2. **List Databases**: Explore databases in a specific cluster
+
+  3. **Browse Database Structures**: Navigate through schemas, tables, columns
+
+  4. **Query Data**: Execute SQL queries safely with a natural language prompt
+
+
+  ### Simple Examples
+
+
+  - "Show me all available Redshift clusters"
+
+  - "List databases in cluster ''my-redshift-cluster''"
+
+  - "What tables are in the ''public'' schema of database ''analytics''?"
+
+  - "Execute: SELECT COUNT(*) FROM users WHERE created_date > ''2024-01-01''"
+
+  '
+metadata:
+  categories: Databases,Data & Analytics
+icon: https://avatars.githubusercontent.com/u/3299148?s=48&v=4
+repoURL: https://github.com/awslabs/mcp/tree/main/src/redshift-mcp-server
+env:
+- key: AWS_ACCESS_KEY_ID
+  name: AWS Access Key ID
+  required: true
+  sensitive: true
+  description: Your AWS Access Key ID
+- key: AWS_SECRET_ACCESS_KEY
+  name: AWS Secret Access Key
+  required: true
+  sensitive: true
+  description: AWS Secret Access Key
+- key: AWS_SESSION_TOKEN
+  name: AWS Session Token
+  required: false
+  sensitive: true
+  description: AWS Session Token, only required if using temporary credentials such as temporary AWS credentials, such as those obtained through aws sso login or other temporary access methods (for example, STS AssumeRole)
+- key: AWS_REGION
+  name: AWS Region
+  required: false
+  sensitive: false
+  description: AWS Region, default to us-east-1
+runtime: containerized
+containerizedConfig:
+  image: ghcr.io/obot-platform/mcp-images/aws-redshift:0.0.20
+  port: 8099
+  path: /
+  args:
+  - awslabs.redshift-mcp-server
+toolPreview:
+- name: list_clusters
+  description: Discovers all available Amazon Redshift clusters and serverless workgroups
+  params: {}
+- name: list_databases
+  description: Lists all databases in a specified Redshift cluster
+  params:
+    cluster_identifier: The cluster identifier from list_clusters
+    database_name: Database to connect to for querying (default "dev")
+- name: list_schemas
+  description: Lists all schemas in a specified database
+  params:
+    cluster_identifier: The cluster identifier from list_clusters
+    schema_database_name: Database name to list schemas for
+- name: list_tables
+  description: Lists all tables in a specified schema
+  params:
+    cluster_identifier: The cluster identifier from list_clusters
+    table_database_name: Database name containing the schema
+    table_schema_name: Schema name to list tables for
+- name: list_columns
+  description: Lists all columns in a specified table
+  params:
+    cluster_identifier: The cluster identifier from list_clusters
+    column_database_name: Database name containing the table
+    column_schema_name: Schema name containing the table
+    column_table_name: Table name to list columns for
+- name: execute_query
+  description: Executes a SQL query against a Redshift cluster with safety protections
+  params:
+    cluster_identifier: The cluster identifier from list_clusters
+    database_name: Database to execute the query against
+    sql: SQL statement to execute (SELECT statements recommended)

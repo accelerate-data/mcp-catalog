@@ -1,0 +1,134 @@
+name: DigitalOcean
+entryKey: obot-digitalocean
+serverUserType: singleUser
+shortDescription: Manage an official DigitalOcean service with a personal access token
+upgradeNote: |
+  This replaces the Obot-hosted DigitalOcean server with DigitalOcean's official hosted MCP servers.
+
+  - **Reconnect required:** Provide a DigitalOcean personal access token and select one service for each connection.
+  - **Configuration change:** The previous comma-separated enabled-services setting is no longer used; create separate connections for multiple services.
+  - **Tool changes:** Available tools and parameters now follow each DigitalOcean-hosted service.
+description: |
+  Manage DigitalOcean resources and perform API actions through [DigitalOcean's vendor-hosted MCP services](https://docs.digitalocean.com/products/app-platform/reference/mcp/).
+
+  See the [official DigitalOcean MCP documentation](https://docs.digitalocean.com/products/app-platform/reference/mcp/) for setup guidance and service details.
+
+  Authentication uses a DigitalOcean personal access token. Create a token with the least-privilege scopes required for the selected service at https://cloud.digitalocean.com/account/api/tokens.
+
+  ## Features
+
+  - **App Platform Management**: Deploy, manage, and monitor applications on DigitalOcean App Platform.
+  - **Droplet Operations**: Create, manage, resize, snapshot, and monitor virtual machines.
+  - **Account Management**: Access account information, billing, invoices, and SSH keys.
+  - **Networking Services**: Manage domains, DNS records, firewalls, load balancers, IPs, and VPCs.
+  - **Database Management**: Provision, manage, and monitor managed database clusters.
+  - **Kubernetes (DOKS)**: Manage DigitalOcean Kubernetes clusters and node pools.
+  - **Object Storage (Spaces)**: Manage Spaces access keys and CDN settings.
+  - **Monitoring & Insights**: Manage uptime checks, alert policies, and resource metrics.
+
+  ## Services
+
+  Choose one DigitalOcean service for this connection. Each service uses a separate remote MCP subdomain, so multiple services require separate connections.
+
+  - **App Platform (`apps`)**: Deploy and manage applications
+  - **Account (`accounts`)**: Access account, billing, invoice, and SSH-key details
+  - **Databases (`databases`)**: Manage database clusters
+  - **Kubernetes (`doks`)**: Manage Kubernetes clusters and node pools
+  - **Droplets (`droplets`)**: Create and manage virtual machines
+  - **Container Registry (`docr`)**: Manage registries and repositories
+  - **Functions (`functions`)**: Manage serverless functions and triggers
+  - **Insights (`insights`)**: Manage monitoring, alerts, and metrics
+  - **Marketplace (`marketplace`)**: Discover and deploy Marketplace applications
+  - **Networking (`networking`)**: Manage DNS, firewalls, load balancers, IPs, and VPCs
+  - **Spaces (`spaces`)**: Manage object-storage keys and CDN settings
+  - **Volumes (`volumes`)**: Manage block-storage volumes and snapshots
+  - **Network File Storage (`nfs`)**: Manage file shares, snapshots, and access rules
+  - **Documentation (`docs`)**: Search DigitalOcean documentation
+  - **Dedicated Inference (`gradient-ai`)**: Manage dedicated inference endpoints
+  - **Model Catalog (`inference-modelcatalog`)**: Browse AI models
+  - **Batch Inference (`batchinference`)**: Run asynchronous batch inference jobs
+  - **AI Evaluations (`genai-evaluation`)**: Manage evaluation datasets and workflows
+
+  > **⚠️ Upgrade notice**
+  >
+  > If you're upgrading this server, note that this replaces the Obot-hosted DigitalOcean server with DigitalOcean's official hosted MCP servers.
+  >
+  > - **Reconnect required:** Provide a DigitalOcean personal access token and select one service for each connection.
+  > - **Configuration change:** The previous comma-separated enabled-services setting is no longer used; create separate connections for multiple services.
+  > - **Tool changes:** Available tools and parameters now follow each DigitalOcean-hosted service.
+metadata:
+  categories: Cloud & Infrastructure, Developer Tools
+  allow-multiple: "true"
+icon: https://cdn.brandfetch.io/idvF37rNoN/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B
+repoURL: https://docs.digitalocean.com/products/app-platform/reference/mcp/
+runtime: remote
+env:
+- name: DigitalOcean Service
+  key: DIGITALOCEAN_SERVICE
+  description: Enter one of the DigitalOcean service values listed in the entry description, such as `apps`, `droplets`, or `docs`.
+  required: true
+  sensitive: false
+  options:
+  - name: App Platform
+    value: apps
+    description: Deploy, manage, and monitor App Platform applications.
+  - name: Account
+    value: accounts
+    description: Access account details, billing, invoices, and SSH keys.
+  - name: Databases
+    value: databases
+    description: Manage DigitalOcean managed database clusters.
+  - name: Kubernetes
+    value: doks
+    description: Manage DigitalOcean Kubernetes clusters and node pools.
+  - name: Droplets
+    value: droplets
+    description: Create and manage DigitalOcean virtual machines.
+  - name: Container Registry
+    value: docr
+    description: Manage container registries, repositories, and garbage collection.
+  - name: Functions
+    value: functions
+    description: Manage serverless function namespaces, actions, and triggers.
+  - name: Insights
+    value: insights
+    description: Manage uptime checks, alert policies, and resource metrics.
+  - name: Marketplace
+    value: marketplace
+    description: Discover and deploy DigitalOcean Marketplace applications.
+  - name: Networking
+    value: networking
+    description: Manage DNS, firewalls, load balancers, IPs, and VPCs.
+  - name: Spaces
+    value: spaces
+    description: Manage Spaces access keys and CDN settings.
+  - name: Volumes
+    value: volumes
+    description: Manage block storage volumes and snapshots.
+  - name: Network File Storage
+    value: nfs
+    description: Manage network file shares, snapshots, and access rules.
+  - name: Documentation
+    value: docs
+    description: Search and retrieve DigitalOcean documentation.
+  - name: Dedicated Inference
+    value: gradient-ai
+    description: Manage GPU-accelerated dedicated inference endpoints.
+  - name: Model Catalog
+    value: inference-modelcatalog
+    description: Browse and retrieve DigitalOcean AI model details.
+  - name: Batch Inference
+    value: batchinference
+    description: Create and monitor asynchronous AI batch inference jobs.
+  - name: AI Evaluations
+    value: genai-evaluation
+    description: Manage datasets and evaluation workflows for AI deployments.
+remoteConfig:
+  urlTemplate: https://${DIGITALOCEAN_SERVICE}.mcp.digitalocean.com/mcp
+  headers:
+  - name: DigitalOcean API Token
+    description: Personal access token with permissions for the selected service
+    key: Authorization
+    required: true
+    sensitive: true
+    prefix: "Bearer "

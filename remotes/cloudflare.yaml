@@ -1,0 +1,67 @@
+name: Cloudflare
+entryKey: obot-cloudflare
+serverUserType: singleUser
+shortDescription: Search and manage the full Cloudflare API through Cloudflare's Code Mode MCP server
+upgradeNote: |
+  This entry now connects to Cloudflare's consolidated API MCP server instead of letting you choose a product-specific `*.mcp.cloudflare.com` server.
+
+  - **Reconnect required:** Connect with Cloudflare OAuth or provide a scoped Cloudflare API token. The previous custom server URL is no longer used.
+  - **Tool changes:** Product-specific native tools are replaced by the `docs`, `search`, and `execute` Code Mode tools. Existing tool names and parameters will change.
+  - **Specialized workflows:** Cloudflare's product-specific MCP servers remain available for targeted workflows, but are no longer selectable through this catalog entry.
+description: |
+  Cloudflare's official, vendor-hosted API MCP server gives agents access to the full Cloudflare API without loading thousands of endpoint schemas into the model context. It searches Cloudflare documentation and the OpenAPI specification, then runs model-written JavaScript in an isolated Worker to make authorized Cloudflare API requests.
+
+  See the [Cloudflare API MCP repository](https://github.com/cloudflare/mcp) and [Cloudflare's MCP server documentation](https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/) for current setup instructions and capabilities.
+
+  ## Features
+  - **Broad API coverage**: Work with more than 2,500 Cloudflare API endpoints across Workers, KV, R2, D1, Pages, DNS, security, networking, AI, observability, and other products.
+  - **Documentation search**: Search current Cloudflare developer documentation before choosing an operation.
+  - **Progressive discovery**: Search the Cloudflare OpenAPI specification on demand instead of placing every endpoint schema in the model context.
+  - **Code Mode execution**: Compose requests, filtering, branching, and result shaping in sandboxed JavaScript through a compact tool surface.
+  - **GraphQL analytics**: Send Cloudflare GraphQL Analytics API queries through the same execution tool.
+
+  ## What you'll need to connect
+  - **Recommended — OAuth**: Sign in to Cloudflare when prompted and select the accounts and permissions the MCP server may use.
+  - **Optional — API token**: For automation or headless use, provide a user or account API token with only the permissions required for your tasks. Account API tokens also need `Account Resources: Read` so the server can identify the account.
+
+  ## Important considerations
+  - Code Mode is experimental and may introduce breaking changes. The server executes model-written JavaScript in an isolated Worker; API access is restricted to the permissions granted by your OAuth connection or API token.
+  - This upgrade preserves broad API and documentation access, but product-specific servers may offer higher-level, curated workflows that are not equivalent to raw API operations.
+  - API tokens with Client IP Address Filtering are not currently supported.
+
+  > **⚠️ Upgrade notice**
+  >
+  > If you're upgrading this server, note that this entry now connects to Cloudflare's consolidated API MCP server instead of letting you choose a product-specific `*.mcp.cloudflare.com` server.
+  >
+  > - **Reconnect required:** Connect with Cloudflare OAuth or provide a scoped Cloudflare API token. The previous custom server URL is no longer used.
+  > - **Tool changes:** Product-specific native tools are replaced by the `docs`, `search`, and `execute` Code Mode tools. Existing tool names and parameters will change.
+  > - **Specialized workflows:** Cloudflare's product-specific MCP servers remain available for targeted workflows, but are no longer selectable through this catalog entry.
+
+metadata:
+  categories: Cloud & Infrastructure, SaaS & API Integrations
+icon: https://avatars.githubusercontent.com/u/314135?s=48&v=4
+repoURL: https://github.com/cloudflare/mcp
+runtime: remote
+remoteConfig:
+  fixedURL: https://mcp.cloudflare.com/mcp
+  headers:
+  - name: Cloudflare API Token
+    description: Optional scoped Cloudflare user or account API token for non-OAuth connections
+    key: Authorization
+    required: false
+    sensitive: true
+    prefix: "Bearer "
+toolPreview:
+- name: docs
+  description: Search Cloudflare developer documentation for products and features.
+  params:
+    query: Cloudflare documentation search query
+- name: search
+  description: Run sandboxed JavaScript against the Cloudflare OpenAPI specification to discover API operations.
+  params:
+    code: JavaScript async arrow function that searches the OpenAPI specification
+- name: execute
+  description: Run sandboxed JavaScript that makes authorized requests to the Cloudflare API.
+  params:
+    code: JavaScript async arrow function that executes Cloudflare API requests
+    account_id: Optional account ID for user tokens or OAuth connections with access to multiple accounts
