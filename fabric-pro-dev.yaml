@@ -43,41 +43,49 @@ containerizedConfig:
     - all
     - --outgoing-auth-strategy
     - UseOnBehalfOf
+  # Every AzureAd key is spelled in upper case on purpose, even though
+  # Microsoft's own docs spell them AzureAd__TenantId. Obot uppercases each
+  # declared env key when it reads the catalog, but compares the oauth
+  # *Env references below against that normalized set verbatim, so a
+  # mixed-case reference can never match its own declaration: the entry
+  # fails validation and is dropped from the synced catalog.
+  # ASP.NET Core matches configuration keys case-insensitively, so the
+  # container binds AZUREAD__TENANTID to AzureAd:TenantId either way.
   oauth:
     provider: microsoftEntra
-    authorityEnv: AzureAd__Instance
-    tenantIDEnv: AzureAd__TenantId
-    clientIDEnv: AzureAd__ClientId
-    clientSecretEnv: AzureAd__ClientCredentials__0__ClientSecret
+    authorityEnv: AZUREAD__INSTANCE
+    tenantIDEnv: AZUREAD__TENANTID
+    clientIDEnv: AZUREAD__CLIENTID
+    clientSecretEnv: AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET
     scopes:
-      - "api://${AzureAd__ClientId}/Mcp.Tools.ReadWrite"
+      - "api://${AZUREAD__CLIENTID}/Mcp.Tools.ReadWrite"
 env:
   - key: ASPNETCORE_URLS
     name: Server Listen Address
     required: true
     sensitive: false
     description: The address the server binds inside its container. Enter http://0.0.0.0:8080 exactly. The server otherwise binds the container's loopback interface on port 5000, which nothing outside the container can reach, and the deployment never becomes ready. There is no command-line flag for this.
-  - key: AzureAd__TenantId
+  - key: AZUREAD__TENANTID
     name: Microsoft Entra Tenant ID
     required: true
     sensitive: false
     description: The directory (tenant) ID of the Microsoft Entra tenant that owns both the app registration and the Fabric tenant.
-  - key: AzureAd__ClientId
+  - key: AZUREAD__CLIENTID
     name: Microsoft Entra Application (Client) ID
     required: true
     sensitive: false
     description: The application (client) ID of the Entra app registration for this server. It must expose the Mcp.Tools.ReadWrite delegated scope and hold delegated Microsoft Fabric permissions.
-  - key: AzureAd__Instance
+  - key: AZUREAD__INSTANCE
     name: Microsoft Entra Instance
     required: true
     sensitive: false
     description: The Entra authority the server validates tokens against. Enter https://login.microsoftonline.com/ for the public cloud, or your sovereign cloud authority.
-  - key: AzureAd__ClientCredentials__0__SourceType
+  - key: AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE
     name: Client Credential Source Type
     required: true
     sensitive: false
     description: Selects which kind of client credential the server uses for the on-behalf-of token exchange. Enter ClientSecret.
-  - key: AzureAd__ClientCredentials__0__ClientSecret
+  - key: AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET
     name: Microsoft Entra Client Secret
     required: true
     sensitive: true
