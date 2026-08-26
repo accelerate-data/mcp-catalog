@@ -558,8 +558,8 @@ records:
     catalog_entry: remotes/intercom.yaml
   - id: b770b020-8081-435f-8e05-4bee9c2a8772
     name: Resend
-    status: imported
-    catalog_entry: remotes/resend.yaml
+    status: existing
+    catalog_entry: resend.yaml
   - id: b89f7865-a755-4f86-8062-c3bd651740ce
     name: Google Drive
     status: existing
