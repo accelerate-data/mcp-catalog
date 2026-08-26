@@ -11,10 +11,14 @@ Run locally:  python scripts/curated-entry-contract/validate-curated-entries.py
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 import yaml
+
+# Obot expands ${VAR} inside a container OAuth scope; only clientIDEnv is allowed.
+SCOPE_TEMPLATE_REF = re.compile(r"\$\{([^}]+)\}")
 
 # Each curated entry pins the values Studio depends on. Add a row per curated
 # entry; the structural checks below apply to all of them. The runtime selects
@@ -42,11 +46,11 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             "healthzPath": "/health",
             "oauth": {
                 "provider": "microsoftEntra",
-                "authorityEnv": "AzureAd__Instance",
-                "tenantIDEnv": "AzureAd__TenantId",
-                "clientIDEnv": "AzureAd__ClientId",
-                "clientSecretEnv": "AzureAd__ClientCredentials__0__ClientSecret",
-                "scopes": ["api://${AzureAd__ClientId}/Mcp.Tools.ReadWrite"],
+                "authorityEnv": "AZUREAD__INSTANCE",
+                "tenantIDEnv": "AZUREAD__TENANTID",
+                "clientIDEnv": "AZUREAD__CLIENTID",
+                "clientSecretEnv": "AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET",
+                "scopes": ["api://${AZUREAD__CLIENTID}/Mcp.Tools.ReadWrite"],
             },
         },
         "envKeys": (
@@ -54,11 +58,11 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             # server binds the container's loopback on port 5000, nothing outside
             # the container can reach it, and readiness never passes.
             "ASPNETCORE_URLS",
-            "AzureAd__TenantId",
-            "AzureAd__ClientId",
-            "AzureAd__Instance",
-            "AzureAd__ClientCredentials__0__SourceType",
-            "AzureAd__ClientCredentials__0__ClientSecret",
+            "AZUREAD__TENANTID",
+            "AZUREAD__CLIENTID",
+            "AZUREAD__INSTANCE",
+            "AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE",
+            "AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET",
         ),
     },
     "mailgun.yaml": {
@@ -279,6 +283,73 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
         fail(f"{label}.sensitive must be true")
 
 
+def normalize_env_key(key: str) -> str:
+    """Mirror Obot's normalizeEnv() so this gate rejects what the catalog read will.
+
+    pkg/mcpcatalog/validation.go uppercases every declared env key and turns
+    hyphens into underscores before any other check runs.
+    """
+    return key.upper().replace("-", "_")
+
+
+def check_containerized_oauth_env_refs(manifest: dict, fail) -> None:
+    """OAuth env references must survive Obot's env-key normalization.
+
+    Obot normalizes `env[].key` on catalog read but compares each
+    `containerizedConfig.oauth.*Env` reference against that normalized set
+    verbatim. A reference spelled the way Microsoft documents it
+    (`AzureAd__TenantId`) can therefore never match its own declaration, so the
+    entry fails validation, is dropped from the synced catalog, and leaves a
+    sync error on the source (VD-4783). Pinning the literals above catches a
+    regression; this check explains it.
+    """
+    env = manifest.get("env") or []
+    declared: list[str] = []
+    for index, field in enumerate(env):
+        if not isinstance(field, dict):
+            continue
+        key = field.get("key")
+        if not isinstance(key, str) or not key.strip():
+            continue
+        declared.append(key)
+        if "." in key:
+            # A dotted key makes Obot treat the value as a mounted file, not an
+            # environment variable, which no OAuth reference can resolve.
+            fail(f"env[{index}].key {key!r} must not contain '.'")
+        elif key != normalize_env_key(key):
+            fail(
+                f"env[{index}].key is {key!r}, expected {normalize_env_key(key)!r}: "
+                "Obot normalizes declared env keys before matching them"
+            )
+
+    oauth = (manifest.get("containerizedConfig") or {}).get("oauth")
+    if not isinstance(oauth, dict):
+        return
+
+    declared_set = set(declared)
+    for field in ("authorityEnv", "tenantIDEnv", "clientIDEnv", "clientSecretEnv"):
+        key = oauth.get(field)
+        if not isinstance(key, str) or not key.strip():
+            fail(f"containerizedConfig.oauth.{field} must be a non-empty string")
+        elif key not in declared_set:
+            fail(
+                f"containerizedConfig.oauth.{field} references {key!r}, "
+                f"which is not declared in env {sorted(declared_set)!r}"
+            )
+
+    client_id_env = oauth.get("clientIDEnv")
+    for index, scope in enumerate(oauth.get("scopes") or []):
+        if not isinstance(scope, str):
+            fail(f"containerizedConfig.oauth.scopes[{index}] must be a string")
+            continue
+        for ref in SCOPE_TEMPLATE_REF.findall(scope):
+            if ref != client_id_env:
+                fail(
+                    f"containerizedConfig.oauth.scopes[{index}] references {ref!r}; "
+                    f"Obot allows only clientIDEnv ({client_id_env!r})"
+                )
+
+
 def check_containerized_auth(manifest: dict, fail) -> None:
     """A containerized entry uses deployment config for its OAuth application.
 
@@ -302,6 +373,8 @@ def check_containerized_auth(manifest: dict, fail) -> None:
     headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
     if headers:
         fail("multiUserConfig.userDefinedHeaders must be absent: Obot owns the per-user OAuth grant")
+
+    check_containerized_oauth_env_refs(manifest, fail)
 
     oauth = (manifest.get("containerizedConfig") or {}).get("oauth")
     if not isinstance(oauth, dict):

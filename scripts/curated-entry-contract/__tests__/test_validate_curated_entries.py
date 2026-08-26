@@ -21,6 +21,9 @@ REPO_ROOT = MODULE_PATH.parents[2]
 with (REPO_ROOT / "resend.yaml").open() as manifest_file:
     VALID_RESEND_MANIFEST = yaml.safe_load(manifest_file)
 
+with (REPO_ROOT / "fabric-pro-dev.yaml").open() as manifest_file:
+    VALID_FABRIC_MANIFEST = yaml.safe_load(manifest_file)
+
 EXPECTED_RESEND_ENTRY = {
     "name": "Resend",
     "entryKey": "obot-resend",
@@ -46,25 +49,36 @@ EXPECTED_RESEND_ENTRY = {
 class CuratedEntryContractTest(unittest.TestCase):
     maxDiff = None
 
-    def write_catalog(self, directory: Path, resend_manifest: dict) -> None:
+    def write_catalog(self, directory: Path, overrides: dict[str, dict]) -> None:
         for filename in curated_entries.CURATED_ENTRIES:
-            source = REPO_ROOT / filename
             target = directory / filename
-            if filename == "resend.yaml":
-                target.write_text(yaml.safe_dump(resend_manifest, sort_keys=False))
+            if filename in overrides:
+                target.write_text(yaml.safe_dump(overrides[filename], sort_keys=False))
                 continue
-            shutil.copy(source, target)
+            shutil.copy(REPO_ROOT / filename, target)
 
-        if "resend.yaml" not in curated_entries.CURATED_ENTRIES:
-            (directory / "resend.yaml").write_text(
-                yaml.safe_dump(resend_manifest, sort_keys=False)
-            )
+        for filename, manifest in overrides.items():
+            if filename not in curated_entries.CURATED_ENTRIES:
+                (directory / filename).write_text(
+                    yaml.safe_dump(manifest, sort_keys=False)
+                )
 
-    def validate_resend_manifest(self, resend_manifest: dict) -> list[str]:
+    def validate_with(self, **overrides: dict) -> list[str]:
+        """Validate the real catalog with the named manifests swapped out."""
+        by_filename = {
+            filename.replace("_", "-") + ".yaml": manifest
+            for filename, manifest in overrides.items()
+        }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_catalog(root, resend_manifest)
+            self.write_catalog(root, by_filename)
             return curated_entries.validate(root)
+
+    def validate_resend_manifest(self, resend_manifest: dict) -> list[str]:
+        return self.validate_with(resend=resend_manifest)
+
+    def validate_fabric_manifest(self, fabric_manifest: dict) -> list[str]:
+        return self.validate_with(fabric_pro_dev=fabric_manifest)
 
     def test_curated_entries_pin_resend_remote_contract(self) -> None:
         self.assertEqual(
@@ -176,6 +190,87 @@ class CuratedEntryContractTest(unittest.TestCase):
                 manifest = copy.deepcopy(VALID_RESEND_MANIFEST)
                 mutate(manifest)
                 self.assertIn(expected_error, self.validate_resend_manifest(manifest))
+
+    def test_accepts_curated_fabric_manifest(self) -> None:
+        self.assertEqual(self.validate_fabric_manifest(VALID_FABRIC_MANIFEST), [])
+
+    def test_fabric_oauth_env_keys_survive_obot_normalization(self) -> None:
+        """Obot uppercases declared env keys, then matches oauth refs verbatim.
+
+        A mixed-case spelling therefore never matches its own declaration, so
+        the entry is dropped from the synced catalog (VD-4783) and the contract
+        pins the normalized form.
+        """
+        oauth = curated_entries.CURATED_ENTRIES["fabric-pro-dev.yaml"][
+            "containerizedConfig"
+        ]["oauth"]
+        declared = set(curated_entries.CURATED_ENTRIES["fabric-pro-dev.yaml"]["envKeys"])
+        for field in ("authorityEnv", "tenantIDEnv", "clientIDEnv", "clientSecretEnv"):
+            key = oauth[field]
+            self.assertEqual(key, curated_entries.normalize_env_key(key))
+            self.assertIn(key, declared)
+        for key in declared:
+            self.assertEqual(key, curated_entries.normalize_env_key(key))
+
+    def test_rejects_fabric_oauth_env_regressions(self) -> None:
+        def set_env_key(manifest: dict, old: str, new: str) -> None:
+            for field in manifest["env"]:
+                if field["key"] == old:
+                    field["key"] = new
+                    return
+            raise AssertionError(f"env key {old!r} not present in the manifest")
+
+        cases = [
+            (
+                "documented mixed-case env key",
+                lambda manifest: set_env_key(
+                    manifest, "AZUREAD__TENANTID", "AzureAd__TenantId"
+                ),
+                "fabric-pro-dev.yaml: env[1].key is 'AzureAd__TenantId', expected "
+                "'AZUREAD__TENANTID': Obot normalizes declared env keys before matching them",
+            ),
+            (
+                "hyphenated env key",
+                lambda manifest: set_env_key(
+                    manifest, "AZUREAD__TENANTID", "AZUREAD-TENANTID"
+                ),
+                "fabric-pro-dev.yaml: env[1].key is 'AZUREAD-TENANTID', expected "
+                "'AZUREAD_TENANTID': Obot normalizes declared env keys before matching them",
+            ),
+            (
+                "dotted env key",
+                lambda manifest: set_env_key(
+                    manifest, "AZUREAD__TENANTID", "AZUREAD.TENANTID"
+                ),
+                "fabric-pro-dev.yaml: env[1].key 'AZUREAD.TENANTID' must not contain '.'",
+            ),
+            (
+                "oauth reference not declared in env",
+                lambda manifest: manifest["containerizedConfig"]["oauth"].__setitem__(
+                    "tenantIDEnv", "AzureAd__TenantId"
+                ),
+                "fabric-pro-dev.yaml: containerizedConfig.oauth.tenantIDEnv references "
+                "'AzureAd__TenantId', which is not declared in env",
+            ),
+            (
+                "scope templating a non-clientID variable",
+                lambda manifest: manifest["containerizedConfig"]["oauth"].__setitem__(
+                    "scopes", ["api://${AZUREAD__TENANTID}/Mcp.Tools.ReadWrite"]
+                ),
+                "fabric-pro-dev.yaml: containerizedConfig.oauth.scopes[0] references "
+                "'AZUREAD__TENANTID'; Obot allows only clientIDEnv ('AZUREAD__CLIENTID')",
+            ),
+        ]
+
+        for name, mutate, expected_error in cases:
+            with self.subTest(name=name):
+                manifest = copy.deepcopy(VALID_FABRIC_MANIFEST)
+                mutate(manifest)
+                errors = self.validate_fabric_manifest(manifest)
+                self.assertTrue(
+                    any(error.startswith(expected_error) for error in errors),
+                    f"{expected_error!r} not raised; got {errors!r}",
+                )
 
 
 if __name__ == "__main__":
