@@ -20,6 +20,7 @@ repoURL: https://github.com/mailgun/mailgun-mcp-server
 runtime: npx
 npxConfig:
   package: "@mailgun/mcp-server@2.1.2"
+  startupTimeoutSeconds: 180
 env:
   - key: MAILGUN_API_KEY
     name: Mailgun API key
