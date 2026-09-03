@@ -71,7 +71,7 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
         "serverUserType": "multiUser",
         "runtime": "npx",
         "package": "@mailgun/mcp-server@2.1.2",
-        "startupTimeoutSeconds": 180,
+        "startupTimeoutSeconds": 600,
     },
     "resend.yaml": {
         "name": "Resend",
