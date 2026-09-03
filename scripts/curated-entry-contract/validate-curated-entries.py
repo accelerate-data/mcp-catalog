@@ -71,6 +71,7 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
         "serverUserType": "multiUser",
         "runtime": "npx",
         "package": "@mailgun/mcp-server@2.1.2",
+        "startupTimeoutSeconds": 180,
     },
     "resend.yaml": {
         "name": "Resend",
@@ -137,6 +138,12 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
         package = npx_config.get("package")
         if package != expected["package"]:
             fail(f"npxConfig.package is {package!r}, expected {expected['package']!r}")
+        startup_timeout = npx_config.get("startupTimeoutSeconds")
+        if startup_timeout != expected["startupTimeoutSeconds"]:
+            fail(
+                "npxConfig.startupTimeoutSeconds is "
+                f"{startup_timeout!r}, expected {expected['startupTimeoutSeconds']!r}"
+            )
         if "args" in npx_config:
             fail("npxConfig.args must be absent for the curated Mailgun entry")
         if manifest.get("remoteConfig"):
