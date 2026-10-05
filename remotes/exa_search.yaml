@@ -1,6 +1,6 @@
 name: Exa Search
 entryKey: obot-exa-search
-serverUserType: singleUser
+serverUserType: multiUser
 shortDescription: Exa web search, advanced retrieval, and API-key research
 upgradeNote: |
   This replaces the Obot-hosted Exa Search server with Exa's official hosted MCP server.
@@ -33,7 +33,7 @@ description: |
 
   ## What you'll need to connect
 
-  An Exa API key from [the Exa dashboard](https://dashboard.exa.ai/api-keys) is required to connect through this catalog entry. Exa provides free credits; account usage and plan limits are managed by Exa. The Search + Research Agent profile can incur usage-based Agent charges.
+  An Exa API key from [the Exa dashboard](https://dashboard.exa.ai/api-keys) is required to connect through this catalog entry. The key is entered once by the deployment owner and shared by everyone who uses the server, so usage is billed to that key's account. Exa provides free credits; account usage and plan limits are managed by Exa. The Search + Research Agent profile can incur usage-based Agent charges.
 
   See the official [Exa MCP setup documentation](https://exa.ai/docs/reference/exa-mcp), [pricing](https://exa.ai/pricing), and [security documentation](https://exa.ai/docs/reference/security).
 

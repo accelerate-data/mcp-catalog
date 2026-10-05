@@ -24,6 +24,9 @@ with (REPO_ROOT / "resend.yaml").open() as manifest_file:
 with (REPO_ROOT / "fabric-pro-dev.yaml").open() as manifest_file:
     VALID_FABRIC_MANIFEST = yaml.safe_load(manifest_file)
 
+with (REPO_ROOT / "remotes" / "exa_search.yaml").open() as manifest_file:
+    VALID_EXA_MANIFEST = yaml.safe_load(manifest_file)
+
 EXPECTED_RESEND_ENTRY = {
     "name": "Resend",
     "entryKey": "obot-resend",
@@ -52,6 +55,7 @@ class CuratedEntryContractTest(unittest.TestCase):
     def write_catalog(self, directory: Path, overrides: dict[str, dict]) -> None:
         for filename in curated_entries.CURATED_ENTRIES:
             target = directory / filename
+            target.parent.mkdir(parents=True, exist_ok=True)
             if filename in overrides:
                 target.write_text(yaml.safe_dump(overrides[filename], sort_keys=False))
                 continue
@@ -76,6 +80,12 @@ class CuratedEntryContractTest(unittest.TestCase):
 
     def validate_resend_manifest(self, resend_manifest: dict) -> list[str]:
         return self.validate_with(resend=resend_manifest)
+
+    def validate_exa_manifest(self, exa_manifest: dict) -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_catalog(root, {"remotes/exa_search.yaml": exa_manifest})
+            return curated_entries.validate(root)
 
     def validate_fabric_manifest(self, fabric_manifest: dict) -> list[str]:
         return self.validate_with(fabric_pro_dev=fabric_manifest)
@@ -190,6 +200,164 @@ class CuratedEntryContractTest(unittest.TestCase):
                 manifest = copy.deepcopy(VALID_RESEND_MANIFEST)
                 mutate(manifest)
                 self.assertIn(expected_error, self.validate_resend_manifest(manifest))
+
+    def test_accepts_curated_exa_manifest(self) -> None:
+        self.assertEqual(self.validate_exa_manifest(VALID_EXA_MANIFEST), [])
+
+    def test_rejects_exa_contract_regressions(self) -> None:
+        def mutate(change) -> dict:
+            manifest = copy.deepcopy(VALID_EXA_MANIFEST)
+            change(manifest)
+            return manifest
+
+        header = "remoteConfig.headers[x-api-key]"
+        cases = [
+            (
+                "single user",
+                mutate(lambda m: m.update(serverUserType="singleUser")),
+                "exa_search.yaml: serverUserType is 'singleUser', expected 'multiUser'",
+            ),
+            (
+                "optional key",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(required=False)),
+                f"exa_search.yaml: {header}.required is False, expected True",
+            ),
+            (
+                "non-sensitive key",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(sensitive=False)),
+                f"exa_search.yaml: {header}.sensitive is False, expected True",
+            ),
+            (
+                "wrong header",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(key="Authorization")),
+                f"exa_search.yaml: {header}.key is 'Authorization', expected 'x-api-key'",
+            ),
+            (
+                "static key value",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(value="shared-key")),
+                f"exa_search.yaml: {header}.value must be absent: "
+                "Exa requires an owner-supplied API key",
+            ),
+            (
+                "credential in url",
+                mutate(
+                    lambda m: m["remoteConfig"].update(
+                        urlTemplate="https://mcp.exa.ai/mcp?tools=${EXA_TOOLS}&exaApiKey=${EXA_API_KEY}"
+                    )
+                ),
+                "exa_search.yaml: remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: "
+                "no credential in the URL",
+            ),
+            (
+                "wrong endpoint",
+                mutate(
+                    lambda m: m["remoteConfig"].update(
+                        urlTemplate="https://example.invalid/mcp?tools=${EXA_TOOLS}"
+                    )
+                ),
+                "exa_search.yaml: remoteConfig.urlTemplate is "
+                "'https://example.invalid/mcp?tools=${EXA_TOOLS}', expected "
+                "'https://mcp.exa.ai/mcp?tools=${EXA_TOOLS}'",
+            ),
+            (
+                "static oauth",
+                mutate(lambda m: m["remoteConfig"].update(staticOAuthRequired=True)),
+                "exa_search.yaml: remoteConfig.staticOAuthRequired must be absent",
+            ),
+            (
+                "per-user header prompt",
+                mutate(
+                    lambda m: m.update(
+                        multiUserConfig={"userDefinedHeaders": [{"name": "k", "key": "x-api-key"}]}
+                    )
+                ),
+                "exa_search.yaml: multiUserConfig.userDefinedHeaders must be absent: "
+                "Exa API key is instance-owned, not per-user",
+            ),
+            (
+                "profile dropped",
+                mutate(lambda m: m["env"][0]["options"].pop(0)),
+                "exa_search.yaml: EXA_TOOLS options are",
+            ),
+            (
+                "profile optional",
+                mutate(lambda m: m["env"][0].update(required=False)),
+                "exa_search.yaml: EXA_TOOLS must be required and non-sensitive",
+            ),
+            (
+                "hostname",
+                mutate(lambda m: m["remoteConfig"].update(hostname="mcp.exa.ai")),
+                "exa_search.yaml: remoteConfig.hostname must be absent",
+            ),
+            (
+                "secret binding",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(secretBinding="exa")),
+                f"exa_search.yaml: {header}.secretBinding must be absent: "
+                "Exa requires an owner-supplied API key",
+            ),
+            (
+                "remote config not a mapping",
+                mutate(lambda m: m.update(remoteConfig="https://mcp.exa.ai/mcp")),
+                "exa_search.yaml: remoteConfig must be a mapping",
+            ),
+            (
+                "literal credential in url",
+                mutate(
+                    lambda m: m["remoteConfig"].update(
+                        urlTemplate="https://mcp.exa.ai/mcp?tools=${EXA_TOOLS}&exaApiKey=abc123"
+                    )
+                ),
+                "exa_search.yaml: remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: "
+                "no credential in the URL",
+            ),
+            (
+                "key interpolated instead of profile",
+                mutate(
+                    lambda m: m["remoteConfig"].update(
+                        urlTemplate="https://mcp.exa.ai/mcp?tools=${EXA_API_KEY}"
+                    )
+                ),
+                "exa_search.yaml: remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: "
+                "no credential in the URL",
+            ),
+            (
+                "fixed url",
+                mutate(lambda m: m["remoteConfig"].update(fixedURL="https://mcp.exa.ai/mcp")),
+                "exa_search.yaml: remoteConfig.fixedURL must be absent",
+            ),
+            (
+                "header prefix added",
+                mutate(lambda m: m["remoteConfig"]["headers"][0].update(prefix="Bearer ")),
+                f"exa_search.yaml: {header} must contain exactly the supported fields",
+            ),
+            (
+                "header missing",
+                mutate(lambda m: m["remoteConfig"].pop("headers")),
+                "exa_search.yaml: remoteConfig.headers must contain exactly one x-api-key header",
+            ),
+            (
+                "profile value changed",
+                mutate(lambda m: m["env"][0]["options"][0].update(value="agent_run")),
+                "exa_search.yaml: EXA_TOOLS options are",
+            ),
+            (
+                "profile sensitive",
+                mutate(lambda m: m["env"][0].update(sensitive=True)),
+                "exa_search.yaml: EXA_TOOLS must be required and non-sensitive",
+            ),
+            (
+                "extra env key",
+                mutate(lambda m: m["env"].append({"name": "x", "key": "EXA_API_KEY"})),
+                "exa_search.yaml: env keys are ['EXA_TOOLS', 'EXA_API_KEY'], expected ['EXA_TOOLS']",
+            ),
+        ]
+        for name, manifest, expected_error in cases:
+            with self.subTest(name):
+                errors = self.validate_exa_manifest(manifest)
+                self.assertTrue(
+                    any(error.startswith(expected_error) for error in errors),
+                    f"{expected_error!r} not in {errors!r}",
+                )
 
     def test_accepts_curated_fabric_manifest(self) -> None:
         self.assertEqual(self.validate_fabric_manifest(VALID_FABRIC_MANIFEST), [])
