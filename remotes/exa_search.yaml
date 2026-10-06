@@ -78,6 +78,7 @@ toolPreview:
   description: Search the web for any topic and get clean, ready-to-use content. Use category:people or category:company in the query to focus on LinkedIn profiles or companies.
   params:
     query: Natural-language search query describing the ideal page. Optionally include category:company or category:people to focus the search.
+    objective: Goal for this search turn, including which documents should rank first and what facts to pull from them. Required by the hosted server.
     numResults: Number of search results to return. Defaults to 10.
 - name: web_search_advanced_exa
   description: Search with control over result categories, domains, dates, content extraction, and subpage crawling.
