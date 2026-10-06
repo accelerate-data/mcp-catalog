@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -92,6 +93,33 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
             }
         ],
     },
+    "remotes/exa_search.yaml": {
+        "name": "Exa Search",
+        "entryKey": "obot-exa-search",
+        "serverUserType": "multiUser",
+        "runtime": "remote",
+        "remoteConfig": {
+            "urlTemplate": "https://mcp.exa.ai/mcp?tools=${EXA_TOOLS}",
+        },
+        "envKeys": ("EXA_TOOLS",),
+        "remoteHeaders": [
+            {
+                "name": "Exa API Key",
+                "description": (
+                    "API key from the Exa dashboard. Sent in the documented x-api-key header."
+                ),
+                "key": "x-api-key",
+                "required": True,
+                "sensitive": True,
+            }
+        ],
+    },
+}
+
+EXA_TOOL_PROFILES = {
+    "Basic Search": "web_search_exa,web_fetch_exa",
+    "Advanced Search": "web_search_exa,web_fetch_exa,web_search_advanced_exa",
+    "Search + Research Agent": "web_search_exa,web_fetch_exa,web_search_advanced_exa,agent_run",
 }
 
 REQUIRED_NON_EMPTY_STRINGS = (
@@ -290,6 +318,79 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
         fail(f"{label}.sensitive must be true")
 
 
+def check_exa_remote_auth(manifest: dict, expected: dict[str, object], fail) -> None:
+    """Exa's hosted MCP server takes one shared API key in a header at Instance scope.
+
+    The key must stay a required, sensitive, owner-supplied header: never in the
+    URL, never a per-user prompt. The only deployment config besides it is the
+    tool profile that the urlTemplate interpolates.
+    """
+    multi_user_config = manifest.get("multiUserConfig")
+    if isinstance(multi_user_config, dict) and "userDefinedHeaders" in multi_user_config:
+        fail(
+            "multiUserConfig.userDefinedHeaders must be absent: "
+            "Exa API key is instance-owned, not per-user"
+        )
+
+    remote_config = manifest.get("remoteConfig")
+    if not isinstance(remote_config, dict):
+        fail("remoteConfig must be a mapping")
+        return
+
+    for field in ("staticOAuthRequired", "fixedURL", "hostname"):
+        if field in remote_config:
+            fail(f"remoteConfig.{field} must be absent")
+
+    url_template = remote_config.get("urlTemplate")
+    if isinstance(url_template, str) and (
+        re.findall(r"\$\{(\w+)\}", url_template) != ["EXA_TOOLS"]
+        or urlsplit(url_template).query != "tools=${EXA_TOOLS}"
+    ):
+        fail("remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: no credential in the URL")
+
+    headers = remote_config.get("headers")
+    if not isinstance(headers, list) or len(headers) != 1 or not isinstance(headers[0], dict):
+        fail("remoteConfig.headers must contain exactly one x-api-key header")
+        return
+
+    header = headers[0]
+    expected_header = (expected.get("remoteHeaders") or [None])[0]
+    if not isinstance(expected_header, dict):
+        fail("curated entry pins invalid remoteHeaders contract")
+        return
+
+    label = "remoteConfig.headers[x-api-key]"
+    for field in ("value", "secretBinding"):
+        if field in header:
+            fail(f"{label}.{field} must be absent: Exa requires an owner-supplied API key")
+
+    if set(header) != set(expected_header):
+        fail(
+            f"{label} must contain exactly the supported fields "
+            f"{sorted(expected_header)!r}; got {sorted(header)!r}"
+        )
+
+    for field, want in expected_header.items():
+        got = header.get(field)
+        mismatch = got is not want if isinstance(want, bool) else got != want
+        if mismatch:
+            fail(f"{label}.{field} is {got!r}, expected {want!r}")
+
+    env = [field for field in manifest.get("env") or [] if isinstance(field, dict)]
+    if len(env) != 1:
+        return  # check_pinned_env_keys already reports a wrong env key set
+    tools = env[0]
+    if tools.get("required") is not True or tools.get("sensitive") is not False:
+        fail("EXA_TOOLS must be required and non-sensitive")
+    profiles = {
+        option.get("name"): option.get("value")
+        for option in tools.get("options") or []
+        if isinstance(option, dict)
+    }
+    if profiles != EXA_TOOL_PROFILES:
+        fail(f"EXA_TOOLS options are {profiles!r}, expected {EXA_TOOL_PROFILES!r}")
+
+
 def normalize_env_key(key: str) -> str:
     """Mirror Obot's normalizeEnv() so this gate rejects what the catalog read will.
 
@@ -393,7 +494,9 @@ def check_containerized_auth(manifest: dict, fail) -> None:
 
 
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
-    if expected.get("remoteHeaders") is not None:
+    if expected["entryKey"] == "obot-exa-search":
+        check_exa_remote_auth(manifest, expected, fail)
+    elif expected.get("remoteHeaders") is not None:
         check_resend_remote_auth(manifest, expected, fail)
     elif expected["runtime"] == "remote":
         check_remote_user_scoped_auth(manifest, fail)

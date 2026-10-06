@@ -93,3 +93,18 @@ entries:
       and exact required Authorization header shape, and it rejects
       staticOAuthRequired, env-backed deployment secrets, and per-user header
       prompts. This declaration does not claim provider certification.
+
+  - file: remotes/exa_search.yaml
+    scan: manual
+    reason: >-
+      Remote runtime. The mcpwn workflow fuzzes first-party container images on
+      localhost; it does not attach to a vendor-hosted MCP endpoint, and
+      aiming an automated security scanner at Exa's production service would
+      be unauthorized third-party testing.
+    alternative: >-
+      The merge gate is a local contract review of the required Instance-owned
+      API key. The curated entry contract pins the hosted endpoint template,
+      the exact required, sensitive x-api-key header, and the reviewed tool
+      profiles, and it rejects credentials in the URL, static header values,
+      staticOAuthRequired, and per-user header prompts. This declaration does
+      not claim provider certification.
