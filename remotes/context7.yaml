@@ -1,6 +1,5 @@
 name: Context7
 entryKey: obot-context7
-serverUserType: singleUser
 shortDescription: Get up-to-date, version-specific code documentation and examples for any library
 upgradeNote: |
   This replaces the Obot-hosted Context7 server with Context7's official hosted MCP server.
@@ -37,29 +36,9 @@ metadata:
   categories: Developer Tools, Documentation
 icon: https://avatars.githubusercontent.com/u/74989412?v=4
 repoURL: https://context7.com/docs
-env:
-- name: Authentication method
-  key: CONTEXT7_ENDPOINT
-  description: Enter `mcp/oauth` for OAuth or `mcp` for anonymous or API-key access. See the entry description for details.
-  required: true
-  sensitive: false
-  options:
-  - name: OAuth
-    value: mcp/oauth
-    description: Sign in to Context7 using OAuth
-  - name: Anonymous / API Key
-    value: mcp
-    description: Connect anonymously or authenticate using a Context7 API key
 runtime: remote
 remoteConfig:
   urlTemplate: https://mcp.context7.com/${CONTEXT7_ENDPOINT}
-  headers:
-  - name: Context7 API Key
-    description: Optional API key for higher limits and private sources; leave blank for anonymous access or OAuth
-    key: Authorization
-    required: false
-    sensitive: true
-    prefix: "Bearer "
 toolPreview:
 - name: resolve-library-id
   description: |-
@@ -109,3 +88,24 @@ toolPreview:
   params:
     libraryId: Exact Context7-compatible library ID (e.g., '/mongodb/docs', '/vercel/next.js', '/supabase/supabase', '/vercel/next.js/v14.3.0-canary.87') retrieved from 'resolve-library-id' or directly from user query in the format '/org/project' or '/org/project/version'.
     query: "What to look up in the library's documentation, scoped to a single concept. Be specific and include relevant details, but keep each query to one topic; if the user's question spans multiple distinct concepts, make a separate call per concept instead of combining them, unless the question is about how the concepts interact. Good: 'How to set up authentication with JWT in Express.js' or 'React useEffect cleanup function examples'. Bad (too vague): 'auth' or 'hooks'. Bad (too broad): 'routing and auth and caching in Next.js'. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query."
+config:
+  - name: Authentication method
+    key: CONTEXT7_ENDPOINT
+    description: Enter `mcp/oauth` for OAuth or `mcp` for anonymous or API-key access. See the entry description for details.
+    required: true
+    sensitive: false
+    options:
+      - name: OAuth
+        value: mcp/oauth
+        description: Sign in to Context7 using OAuth
+      - name: Anonymous / API Key
+        value: mcp
+        description: Connect anonymously or authenticate using a Context7 API key
+    usage: env
+  - name: Context7 API Key
+    description: Optional API key for higher limits and private sources; leave blank for anonymous access or OAuth
+    key: Authorization
+    required: false
+    sensitive: true
+    prefix: "Bearer "
+    usage: header

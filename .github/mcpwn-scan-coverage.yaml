@@ -36,35 +36,11 @@ entries:
       Fabric API would also be unauthorized testing of a third party's service.
     alternative: >-
       The curated entry contract pins remoteConfig.fixedURL and
-      staticOAuthRequired, and fails the build if the entry grows an `env`
-      block or a remoteConfig header — so no deployment-wide credential can
+      staticOAuthRequired, and fails the build if the entry grows a native `config`
+      input — so no deployment-wide credential can
       reach the vendor endpoint and authorization stays user-scoped OAuth.
       There is no first-party attack surface here: the entry contributes a URL
       and an auth contract, not a running server.
-
-  - file: fabric-pro-dev.yaml
-    scan: manual
-    reason: >-
-      The container authenticates its MCP path. mcpwn discovers an entry's
-      tools by calling that path anonymously and has no auth channel at all
-      (no credential flag, no Authorization handling in its transport), so
-      discovery is refused with 401, the run aborts before writing a report,
-      and no configuration makes it complete. Supplying a real Entra client
-      secret to get past it would aim a fuzzer at a live vendor API under a
-      production app registration, which is not acceptable.
-    alternative: >-
-      Manual probe, 2026-08-07, against the pinned image
-      mcr.microsoft.com/fabric/fabric-mcp:1.2.0 started with the entry's
-      declared configuration: GET /health returned 200 anonymously, POST /
-      returned 401 without a bearer token, and mcpwn against the same
-      container reported "Found 0 tools, 0 resources" and exited non-zero —
-      confirming both the readiness contract and that the endpoint is not
-      anonymously reachable. The image is a vendor-published tag pinned by the
-      curated entry contract so it cannot drift silently. The contract forbids
-      static environment values and user-defined Authorization headers, and
-      requires the deployment-owned Entra OAuth descriptor that lets Obot hold
-      each user's renewable grant and inject a bearer only for that user's
-      request.
 
   - file: mailgun.yaml
     scan: manual
@@ -77,7 +53,7 @@ entries:
       Obot and its published tools were discovered through Studio's real
       AgentSession bridge. The curated entry contract pins that package,
       rejects runtime arguments and remote configuration, and permits only the
-      reviewed MAILGUN_API_KEY and MAILGUN_API_REGION environment fields, with
+      reviewed MAILGUN_API_KEY and MAILGUN_API_REGION config inputs with usage env, with
       the API key required and sensitive.
 
   - file: resend.yaml
@@ -90,8 +66,8 @@ entries:
     alternative: >-
       The merge gate is a local contract review of the required Instance-owned
       bearer credential. The curated entry contract pins the hosted endpoint
-      and exact required Authorization header shape, and it rejects
-      staticOAuthRequired, env-backed deployment secrets, and per-user header
+      and exact required config entry with usage header for Authorization, and it rejects
+      staticOAuthRequired, non-header config inputs, and per-user header
       prompts. This declaration does not claim provider certification.
 
   - file: remotes/exa_search.yaml
@@ -104,7 +80,7 @@ entries:
     alternative: >-
       The merge gate is a local contract review of the required Instance-owned
       API key. The curated entry contract pins the hosted endpoint template,
-      the exact required, sensitive x-api-key header, and the reviewed tool
+      the exact required, sensitive x-api-key config input with usage header, and the reviewed tool
       profiles, and it rejects credentials in the URL, static header values,
       staticOAuthRequired, and per-user header prompts. This declaration does
       not claim provider certification.

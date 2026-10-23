@@ -4,7 +4,8 @@
 Upstream's Build workflow proves manifest well-formedness for every file. This
 check is narrower and stricter: it pins the fields Studio's
 classifyCatalogEntrySupport() reads, and it fails when a curated entry is
-deleted, renamed, or regressed by a fork sync.
+deleted, renamed, or regressed by a fork sync. It also rejects deprecated
+configuration shapes across the active catalog, including non-curated entries.
 
 Run locally:  python scripts/curated-entry-contract/validate-curated-entries.py
 """
@@ -12,14 +13,12 @@ Run locally:  python scripts/curated-entry-contract/validate-curated-entries.py
 from __future__ import annotations
 
 import re
+from fnmatch import fnmatch
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
-
-# Obot expands ${VAR} inside a container OAuth scope; only clientIDEnv is allowed.
-SCOPE_TEMPLATE_REF = re.compile(r"\$\{([^}]+)\}")
 
 # Each curated entry pins the values Studio depends on. Add a row per curated
 # entry; the structural checks below apply to all of them. The runtime selects
@@ -28,48 +27,15 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
     "fabric-core.yaml": {
         "name": "Fabric Core",
         "entryKey": "obot-fabric-core",
-        "serverUserType": "multiUser",
         "runtime": "remote",
         "remoteConfig": {
             "fixedURL": "https://api.fabric.microsoft.com/v1/mcp/core",
             "staticOAuthRequired": True,
         },
     },
-    "fabric-pro-dev.yaml": {
-        "name": "Fabric Pro-Dev",
-        "entryKey": "obot-fabric-pro-dev",
-        "serverUserType": "multiUser",
-        "runtime": "containerized",
-        "containerizedConfig": {
-            "image": "mcr.microsoft.com/fabric/fabric-mcp:1.2.0",
-            "port": 8080,
-            "path": "/",
-            "healthzPath": "/health",
-            "oauth": {
-                "provider": "microsoftEntra",
-                "authorityEnv": "AZUREAD__INSTANCE",
-                "tenantIDEnv": "AZUREAD__TENANTID",
-                "clientIDEnv": "AZUREAD__CLIENTID",
-                "clientSecretEnv": "AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET",
-                "scopes": ["api://${AZUREAD__CLIENTID}/Mcp.Tools.ReadWrite"],
-            },
-        },
-        "envKeys": (
-            # No command-line flag sets the listen address. Without this key the
-            # server binds the container's loopback on port 5000, nothing outside
-            # the container can reach it, and readiness never passes.
-            "ASPNETCORE_URLS",
-            "AZUREAD__TENANTID",
-            "AZUREAD__CLIENTID",
-            "AZUREAD__INSTANCE",
-            "AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE",
-            "AZUREAD__CLIENTCREDENTIALS__0__CLIENTSECRET",
-        ),
-    },
     "mailgun.yaml": {
         "name": "Mailgun",
         "entryKey": "obot-mailgun",
-        "serverUserType": "multiUser",
         "runtime": "npx",
         "package": "@mailgun/mcp-server@2.1.2",
         "startupTimeoutSeconds": 600,
@@ -77,12 +43,11 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
     "resend.yaml": {
         "name": "Resend",
         "entryKey": "obot-resend",
-        "serverUserType": "multiUser",
         "runtime": "remote",
         "remoteConfig": {
             "fixedURL": "https://mcp.resend.com/mcp",
         },
-        "remoteHeaders": [
+        "headers": [
             {
                 "name": "Resend API key",
                 "description": "Shared Resend API key for the MCP deployment.",
@@ -90,25 +55,26 @@ CURATED_ENTRIES: dict[str, dict[str, object]] = {
                 "required": True,
                 "sensitive": True,
                 "prefix": "Bearer ",
+                "usage": "header",
             }
         ],
     },
     "remotes/exa_search.yaml": {
         "name": "Exa Search",
         "entryKey": "obot-exa-search",
-        "serverUserType": "multiUser",
         "runtime": "remote",
         "remoteConfig": {
             "urlTemplate": "https://mcp.exa.ai/mcp?tools=${EXA_TOOLS}",
         },
-        "envKeys": ("EXA_TOOLS",),
-        "remoteHeaders": [
+        "configKeys": ("x-api-key", "EXA_TOOLS"),
+        "headers": [
             {
                 "name": "Exa API Key",
                 "description": (
                     "API key from the Exa dashboard. Sent in the documented x-api-key header."
                 ),
                 "key": "x-api-key",
+                "usage": "header",
                 "required": True,
                 "sensitive": True,
             }
@@ -152,7 +118,7 @@ def check_required_strings(manifest: dict, fail) -> None:
 
 
 def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> None:
-    for field in ("name", "entryKey", "serverUserType", "runtime"):
+    for field in ("name", "entryKey", "runtime"):
         actual = manifest.get(field)
         if actual != expected[field]:
             fail(f"{field} is {actual!r}, expected {expected[field]!r}")
@@ -192,36 +158,33 @@ def check_pinned_values(manifest: dict, expected: dict[str, object], fail) -> No
             fail(f"{config_key}.{field} is {got!r}, expected {want!r}")
 
 
-def check_pinned_env_keys(manifest: dict, expected: dict[str, object], fail) -> None:
-    """An entry whose image needs a fixed env value pins the whole key list.
+def config_fields(manifest: dict, usage: str) -> list[dict]:
+    return [
+        field
+        for field in manifest.get("config") or []
+        if isinstance(field, dict) and field.get("usage") == usage
+    ]
 
-    Obot builds a containerized server's environment solely from the operator's
-    answers to `env` — ContainerizedRuntimeConfig carries no env field — so an
-    image that requires a non-secret variable with no command-line equivalent
-    depends on that key staying declared. Dropping one leaves every other check
-    green while the deployment can no longer start.
-    """
-    want = expected.get("envKeys")
+
+def check_pinned_config_keys(manifest: dict, expected: dict[str, object], fail) -> None:
+    want = expected.get("configKeys")
     if want is None:
         return
-
-    got = [field.get("key") for field in manifest.get("env") or [] if isinstance(field, dict)]
-    if got != list(want):  # type: ignore[arg-type]
-        fail(f"env keys are {got!r}, expected {list(want)!r}")  # type: ignore[arg-type]
+    got = [
+        field.get("key")
+        for field in manifest.get("config") or []
+        if isinstance(field, dict)
+    ]
+    if sorted(got) != sorted(want):
+        fail(f"config keys are {got!r}, expected {list(want)!r}")
 
 
 def check_remote_user_scoped_auth(manifest: dict, fail) -> None:
-    """A user-authorized remote entry must configure no deployment-wide credential.
-
-    An env block or a remoteConfig header would make an operator-supplied secret
-    part of the entry, which is exactly what user-scoped OAuth must not require.
-    """
-    if manifest.get("env"):
-        fail("env must be absent: authorization is user-scoped, not deployment-configured")
-
-    headers = (manifest.get("remoteConfig") or {}).get("headers")
-    if headers:
-        fail("remoteConfig.headers must be absent: no static credential is sent to the server")
+    """Fabric Core uses per-user OAuth, without deployment-owned inputs."""
+    if manifest.get("config"):
+        fail(
+            "config must be absent: authorization is user-scoped, not deployment-configured"
+        )
 
 
 def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) -> None:
@@ -230,17 +193,8 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
     Studio must keep the integration on one required deployment-owned secret,
     without adding env-based credentials, static OAuth, or per-user header prompts.
     """
-    if "env" in manifest:
-        fail(
-            "env must be absent: Resend remote auth must stay on the required shared bearer header"
-        )
-
-    multi_user_config = manifest.get("multiUserConfig")
-    if isinstance(multi_user_config, dict) and "userDefinedHeaders" in multi_user_config:
-        fail(
-            "multiUserConfig.userDefinedHeaders must be absent: "
-            "Resend remote auth is instance-owned, not per-user"
-        )
+    if any(field.get("usage") != "header" for field in manifest.get("config") or []):
+        fail("config must contain only the required shared bearer header")
 
     remote_config = manifest.get("remoteConfig")
     if not isinstance(remote_config, dict):
@@ -250,28 +204,28 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
     if "staticOAuthRequired" in remote_config:
         fail("remoteConfig.staticOAuthRequired must be absent")
 
-    headers = remote_config.get("headers")
+    headers = config_fields(manifest, "header")
     if not isinstance(headers, list) or len(headers) != 1:
         fail(
-            "remoteConfig.headers must contain exactly one Authorization header "
+            "config must contain exactly one Authorization header "
             "for the required shared bearer credential"
         )
         return
 
     header = headers[0]
     if not isinstance(header, dict):
-        fail("remoteConfig.headers[0] must be a mapping")
+        fail("config[0] must be a mapping")
         return
 
     key = header.get("key")
     if key != "Authorization":
-        fail(f"remoteConfig.headers[0].key is {key!r}, expected 'Authorization'")
+        fail(f"config[0].key is {key!r}, expected 'Authorization'")
         return
 
-    label = "remoteConfig.headers[Authorization]"
-    expected_header = (expected.get("remoteHeaders") or [None])[0]
+    label = "config[Authorization]"
+    expected_header = (expected.get("headers") or [None])[0]
     if not isinstance(expected_header, dict):
-        fail("curated entry pins invalid remoteHeaders contract")
+        fail("curated entry pins invalid headers contract")
         return
 
     allowed_header_fields = {
@@ -281,8 +235,9 @@ def check_resend_remote_auth(manifest: dict, expected: dict[str, object], fail) 
         "required",
         "sensitive",
         "prefix",
+        "usage",
     }
-    for field in ("value", "secretBinding"):
+    for field in ("value", "static", "secretBinding", "userAllowed"):
         if field in header:
             fail(
                 f"{label}.{field} must be absent: Resend remote auth requires an "
@@ -325,13 +280,6 @@ def check_exa_remote_auth(manifest: dict, expected: dict[str, object], fail) -> 
     URL, never a per-user prompt. The only deployment config besides it is the
     tool profile that the urlTemplate interpolates.
     """
-    multi_user_config = manifest.get("multiUserConfig")
-    if isinstance(multi_user_config, dict) and "userDefinedHeaders" in multi_user_config:
-        fail(
-            "multiUserConfig.userDefinedHeaders must be absent: "
-            "Exa API key is instance-owned, not per-user"
-        )
-
     remote_config = manifest.get("remoteConfig")
     if not isinstance(remote_config, dict):
         fail("remoteConfig must be a mapping")
@@ -346,23 +294,31 @@ def check_exa_remote_auth(manifest: dict, expected: dict[str, object], fail) -> 
         re.findall(r"\$\{(\w+)\}", url_template) != ["EXA_TOOLS"]
         or urlsplit(url_template).query != "tools=${EXA_TOOLS}"
     ):
-        fail("remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: no credential in the URL")
+        fail(
+            "remoteConfig.urlTemplate must interpolate only ${EXA_TOOLS}: no credential in the URL"
+        )
 
-    headers = remote_config.get("headers")
-    if not isinstance(headers, list) or len(headers) != 1 or not isinstance(headers[0], dict):
-        fail("remoteConfig.headers must contain exactly one x-api-key header")
+    headers = config_fields(manifest, "header")
+    if (
+        not isinstance(headers, list)
+        or len(headers) != 1
+        or not isinstance(headers[0], dict)
+    ):
+        fail("config must contain exactly one x-api-key header")
         return
 
     header = headers[0]
-    expected_header = (expected.get("remoteHeaders") or [None])[0]
+    expected_header = (expected.get("headers") or [None])[0]
     if not isinstance(expected_header, dict):
-        fail("curated entry pins invalid remoteHeaders contract")
+        fail("curated entry pins invalid headers contract")
         return
 
-    label = "remoteConfig.headers[x-api-key]"
-    for field in ("value", "secretBinding"):
+    label = "config[x-api-key]"
+    for field in ("value", "static", "secretBinding", "userAllowed"):
         if field in header:
-            fail(f"{label}.{field} must be absent: Exa requires an owner-supplied API key")
+            fail(
+                f"{label}.{field} must be absent: Exa requires an owner-supplied API key"
+            )
 
     if set(header) != set(expected_header):
         fail(
@@ -376,9 +332,10 @@ def check_exa_remote_auth(manifest: dict, expected: dict[str, object], fail) -> 
         if mismatch:
             fail(f"{label}.{field} is {got!r}, expected {want!r}")
 
-    env = [field for field in manifest.get("env") or [] if isinstance(field, dict)]
+    env = config_fields(manifest, "env")
     if len(env) != 1:
-        return  # check_pinned_env_keys already reports a wrong env key set
+        fail("EXA_TOOLS must have usage env")
+        return
     tools = env[0]
     if tools.get("required") is not True or tools.get("sensitive") is not False:
         fail("EXA_TOOLS must be required and non-sensitive")
@@ -387,154 +344,33 @@ def check_exa_remote_auth(manifest: dict, expected: dict[str, object], fail) -> 
         for option in tools.get("options") or []
         if isinstance(option, dict)
     }
-    if profiles != EXA_TOOL_PROFILES:
+    if profiles != EXA_TOOL_PROFILES or len(tools.get("options") or []) != len(
+        EXA_TOOL_PROFILES
+    ):
         fail(f"EXA_TOOLS options are {profiles!r}, expected {EXA_TOOL_PROFILES!r}")
-
-
-def normalize_env_key(key: str) -> str:
-    """Mirror Obot's normalizeEnv() so this gate rejects what the catalog read will.
-
-    pkg/mcpcatalog/validation.go uppercases every declared env key and turns
-    hyphens into underscores before any other check runs.
-    """
-    return key.upper().replace("-", "_")
-
-
-def check_containerized_oauth_env_refs(manifest: dict, fail) -> None:
-    """OAuth env references must survive Obot's env-key normalization.
-
-    Obot normalizes `env[].key` on catalog read but compares each
-    `containerizedConfig.oauth.*Env` reference against that normalized set
-    verbatim. A reference spelled the way Microsoft documents it
-    (`AzureAd__TenantId`) can therefore never match its own declaration, so the
-    entry fails validation, is dropped from the synced catalog, and leaves a
-    sync error on the source (VD-4783). Pinning the literals above catches a
-    regression; this check explains it.
-    """
-    env = manifest.get("env") or []
-    declared: list[str] = []
-    for index, field in enumerate(env):
-        if not isinstance(field, dict):
-            continue
-        key = field.get("key")
-        if not isinstance(key, str) or not key.strip():
-            continue
-        declared.append(key)
-        if "." in key:
-            # A dotted key makes Obot treat the value as a mounted file, not an
-            # environment variable, which no OAuth reference can resolve.
-            fail(f"env[{index}].key {key!r} must not contain '.'")
-        elif key != normalize_env_key(key):
-            fail(
-                f"env[{index}].key is {key!r}, expected {normalize_env_key(key)!r}: "
-                "Obot normalizes declared env keys before matching them"
-            )
-
-    oauth = (manifest.get("containerizedConfig") or {}).get("oauth")
-    if not isinstance(oauth, dict):
-        return
-
-    declared_set = set(declared)
-    for field in ("authorityEnv", "tenantIDEnv", "clientIDEnv", "clientSecretEnv"):
-        key = oauth.get(field)
-        if not isinstance(key, str) or not key.strip():
-            fail(f"containerizedConfig.oauth.{field} must be a non-empty string")
-        elif key not in declared_set:
-            fail(
-                f"containerizedConfig.oauth.{field} references {key!r}, "
-                f"which is not declared in env {sorted(declared_set)!r}"
-            )
-
-    client_id_env = oauth.get("clientIDEnv")
-    for index, scope in enumerate(oauth.get("scopes") or []):
-        if not isinstance(scope, str):
-            fail(f"containerizedConfig.oauth.scopes[{index}] must be a string")
-            continue
-        for ref in SCOPE_TEMPLATE_REF.findall(scope):
-            if ref != client_id_env:
-                fail(
-                    f"containerizedConfig.oauth.scopes[{index}] references {ref!r}; "
-                    f"Obot allows only clientIDEnv ({client_id_env!r})"
-                )
-
-
-def check_containerized_auth(manifest: dict, fail) -> None:
-    """A containerized entry uses deployment config for its OAuth application.
-
-    Obot owns every user's authorization grant and injects the refreshed bearer
-    into that user's request. The catalog must not fall back to pasted headers.
-    """
-    for index, field in enumerate(manifest.get("env") or []):
-        label = f"env[{index}]"
-        if not isinstance(field, dict):
-            fail(f"{label} must be a mapping")
-            continue
-        key = field.get("key")
-        if not isinstance(key, str) or not key.strip():
-            fail(f"{label}.key must be a non-empty string")
-            continue
-        # Obot's catalog path reads only credEnv[key] for a non-system server, so
-        # a static value is silently dropped and a required field lands unset.
-        if field.get("value"):
-            fail(f"env[{key}].value must be absent: Obot ignores it on a catalog entry")
-
-    headers = (manifest.get("multiUserConfig") or {}).get("userDefinedHeaders")
-    if headers:
-        fail("multiUserConfig.userDefinedHeaders must be absent: Obot owns the per-user OAuth grant")
-
-    check_containerized_oauth_env_refs(manifest, fail)
-
-    oauth = (manifest.get("containerizedConfig") or {}).get("oauth")
-    if not isinstance(oauth, dict):
-        fail("containerizedConfig.oauth must declare the deployment-owned OAuth application")
-        return
-    expected = CURATED_ENTRIES["fabric-pro-dev.yaml"]["containerizedConfig"]["oauth"]
-    if oauth != expected:
-        fail(f"containerizedConfig.oauth is {oauth!r}, expected {expected!r}")
 
 
 def check_authorization(manifest: dict, expected: dict[str, object], fail) -> None:
     if expected["entryKey"] == "obot-exa-search":
         check_exa_remote_auth(manifest, expected, fail)
-    elif expected.get("remoteHeaders") is not None:
+    elif expected.get("headers") is not None:
         check_resend_remote_auth(manifest, expected, fail)
     elif expected["runtime"] == "remote":
         check_remote_user_scoped_auth(manifest, fail)
-    elif expected["runtime"] == "containerized":
-        check_containerized_auth(manifest, fail)
-    else:
+    elif expected["runtime"] == "npx":
         check_mailgun_deployment_config(manifest, fail)
 
 
-def check_containerized_readiness(manifest: dict, fail) -> None:
-    """Obot's readiness probe must reach an anonymous endpoint.
-
-    With no healthzPath, Obot POSTs an MCP `initialize` body to the container
-    path and requires a 200. A server that authenticates its MCP endpoint
-    answers 401 there, so the deployment never becomes ready.
-    """
-    healthz = (manifest.get("containerizedConfig") or {}).get("healthzPath")
-    if not isinstance(healthz, str) or not healthz.strip():
-        fail(
-            "containerizedConfig.healthzPath must be a non-empty string: "
-            "Obot's fallback readiness probe hits the authenticated MCP path"
-        )
-
-
 def check_mailgun_deployment_config(manifest: dict, fail) -> None:
-    multi_user_config = manifest.get("multiUserConfig")
-    if multi_user_config is not None and not isinstance(multi_user_config, dict):
-        fail("multiUserConfig must be a mapping when present")
-        user_defined_headers = None
-    else:
-        user_defined_headers = (multi_user_config or {}).get("userDefinedHeaders")
-    if user_defined_headers:
-        fail("multiUserConfig.userDefinedHeaders must be absent for an npx stdio server")
-
-    env = manifest.get("env")
-    if not isinstance(env, list):
-        fail("env must be a list")
-        return
+    env = manifest.get("config") or []
+    if any(field.get("usage") != "env" for field in env):
+        fail("Mailgun config must use env: stdio cannot carry request headers")
+    for field in env:
+        for key in ("value", "static", "secretBinding", "userAllowed"):
+            if key in field:
+                fail(
+                    f"Mailgun config.{key} must be absent: credentials are owner-supplied"
+                )
 
     fields = {
         field.get("key"): field
@@ -543,7 +379,7 @@ def check_mailgun_deployment_config(manifest: dict, fail) -> None:
     }
     api_key = fields.get("MAILGUN_API_KEY")
     if not isinstance(api_key, dict):
-        fail("env must declare MAILGUN_API_KEY")
+        fail("config must declare MAILGUN_API_KEY")
     elif api_key.get("required") is not True or api_key.get("sensitive") is not True:
         fail("MAILGUN_API_KEY must be required and sensitive")
 
@@ -552,11 +388,11 @@ def check_mailgun_deployment_config(manifest: dict, fail) -> None:
 
     expected_keys = {"MAILGUN_API_KEY", "MAILGUN_API_REGION"}
     if set(fields) != expected_keys:
-        fail(f"env keys are {sorted(fields)!r}, expected {sorted(expected_keys)!r}")
+        fail(f"config keys are {sorted(fields)!r}, expected {sorted(expected_keys)!r}")
 
     region = fields.get("MAILGUN_API_REGION")
     if not isinstance(region, dict):
-        fail("env must declare MAILGUN_API_REGION")
+        fail("config must declare MAILGUN_API_REGION")
     elif region.get("required") is not False or region.get("sensitive") is not False:
         fail("MAILGUN_API_REGION must be optional and non-sensitive")
 
@@ -598,8 +434,84 @@ def check_tool_preview(manifest: dict, fail) -> None:
                 fail(f"{label}.params.{param} must be a non-empty string")
 
 
+def check_native_config(manifest: dict, fail) -> None:
+    """Reject legacy source shapes even when Obot's compatibility decoder accepts them."""
+    for key in ("serverUserType", "multiUserConfig", "env"):
+        if key in manifest:
+            fail(f"{key} is deprecated; use native config with usage")
+    for runtime in ("remoteConfig", "containerizedConfig"):
+        config = manifest.get(runtime)
+        if isinstance(config, dict) and "headers" in config:
+            fail(f"{runtime}.headers is deprecated; use config with usage header")
+    fields = manifest.get("config", [])
+    if not isinstance(fields, list):
+        fail("config must be a list")
+        return
+    seen = set()
+    for index, field in enumerate(fields):
+        if not isinstance(field, dict):
+            fail(f"config[{index}] must be a mapping")
+            continue
+        key = field.get("key")
+        if not isinstance(key, str) or not key.strip():
+            fail(f"config[{index}].key must be a non-empty string")
+        elif key in seen:
+            fail(f"config key {key!r} is duplicated")
+        else:
+            seen.add(key)
+        if field.get("usage") not in (
+            "env",
+            "header",
+            "file",
+            "dynamicFile",
+            "interpolated",
+        ):
+            fail(f"config[{index}].usage must be a native MCPConfig usage")
+        for legacy in ("file", "dynamicFile", "interpolated"):
+            if legacy in field:
+                fail(f"config[{index}].{legacy} is deprecated; use usage")
+
+
+def active_catalog_files(root: Path) -> list[Path]:
+    # The repository uses Obot's default *.yaml selection and its ignore file.
+    # Recurse so upstream additions outside remotes remain covered as well.
+    ignore_file = root / ".ignoreobotcatalogs"
+    ignores = (
+        [
+            line.strip()
+            for line in ignore_file.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        if ignore_file.exists()
+        else []
+    )
+    return sorted(
+        path
+        for path in root.rglob("*.yaml")
+        if not path.is_symlink()
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
+        and not any(
+            fnmatch(path.relative_to(root).as_posix(), pattern) for pattern in ignores
+        )
+    )
+
+
 def validate(root: Path) -> list[str]:
     errors: list[str] = []
+
+    for path in active_catalog_files(root):
+        try:
+            manifest = yaml.safe_load(path.read_text())
+        except yaml.YAMLError as error:
+            errors.append(f"{path.name}: invalid YAML: {error}")
+            continue
+        if not isinstance(manifest, dict):
+            errors.append(f"{path.name}: manifest must be a mapping")
+            continue
+        check_native_config(
+            manifest,
+            lambda message, path=path: errors.append(f"{path.name}: {message}"),
+        )
 
     for filename, expected in sorted(CURATED_ENTRIES.items()):
         path = root / filename
@@ -626,12 +538,14 @@ def validate(root: Path) -> list[str]:
             fail("manifest must be a mapping")
             continue
 
+        native_errors = []
+        check_native_config(manifest, native_errors.append)
+        if native_errors:
+            continue
         check_required_strings(manifest, fail)
         check_pinned_values(manifest, expected, fail)
-        check_pinned_env_keys(manifest, expected, fail)
+        check_pinned_config_keys(manifest, expected, fail)
         check_authorization(manifest, expected, fail)
-        if runtime == "containerized":
-            check_containerized_readiness(manifest, fail)
         check_tool_preview(manifest, fail)
 
     return errors

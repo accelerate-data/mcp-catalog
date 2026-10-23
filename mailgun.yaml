@@ -1,6 +1,5 @@
 name: Mailgun
 entryKey: obot-mailgun
-serverUserType: multiUser
 shortDescription: Send email and inspect Mailgun delivery operations through the official MCP server
 description: |
   The official Mailgun Model Context Protocol server exposes curated tools for
@@ -21,17 +20,6 @@ runtime: npx
 npxConfig:
   package: "@mailgun/mcp-server@2.1.2"
   startupTimeoutSeconds: 600
-env:
-  - key: MAILGUN_API_KEY
-    name: Mailgun API key
-    description: API key used by the shared Mailgun MCP deployment.
-    required: true
-    sensitive: true
-  - key: MAILGUN_API_REGION
-    name: Mailgun API region
-    description: Optional Mailgun API region. Use us or eu; defaults to us.
-    required: false
-    sensitive: false
 toolPreview:
   - name: post-v3-domain-name-messages
     description: Send an email through a configured Mailgun domain.
@@ -48,3 +36,16 @@ toolPreview:
     description: Validate an email address using Mailgun validation capabilities.
     params:
       address: Email address to validate.
+config:
+  - key: MAILGUN_API_KEY
+    name: Mailgun API key
+    description: API key used by the shared Mailgun MCP deployment.
+    required: true
+    sensitive: true
+    usage: env
+  - key: MAILGUN_API_REGION
+    name: Mailgun API region
+    description: Optional Mailgun API region. Use us or eu; defaults to us.
+    required: false
+    sensitive: false
+    usage: env

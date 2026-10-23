@@ -1,6 +1,5 @@
 name: Postman
 entryKey: obot-postman
-serverUserType: multiUser
 shortDescription: Connect to Postman collections, workspaces, environments, mocks, and API specs
 upgradeNote: |
   This updates the Postman-hosted connection with OAuth support and selectable region and tool configurations.
@@ -44,7 +43,10 @@ metadata:
 icon: https://avatars.githubusercontent.com/u/10251060?s=48&v=4
 repoURL: https://www.postman.com/product/mcp-server/
 
-env:
+runtime: remote
+remoteConfig:
+  urlTemplate: ${HOST_URL}/${TOOL_CONFIGURATION}
+config:
   - name: Postman Region
     key: HOST_URL
     description: Enter `https://mcp.postman.com` for United States or `https://mcp.eu.postman.com` for Europe. See the entry description for details.
@@ -57,6 +59,7 @@ env:
       - name: Europe
         value: https://mcp.eu.postman.com
         description: Requires a Postman API key
+    usage: env
   - name: Tool Configuration
     key: TOOL_CONFIGURATION
     description: Enter `minimal`, `code`, or `mcp`. See the entry description for details.
@@ -72,14 +75,11 @@ env:
       - name: Full
         value: mcp
         description: All Postman tools, including advanced collaboration and administration
-
-runtime: remote
-remoteConfig:
-  urlTemplate: ${HOST_URL}/${TOOL_CONFIGURATION}
-  headers:
-    - name: Postman API Key
-      description: Optional for US OAuth; required for the Europe region
-      key: Authorization
-      required: false
-      sensitive: true
-      prefix: "Bearer "
+    usage: env
+  - name: Postman API Key
+    description: Optional for US OAuth; required for the Europe region
+    key: Authorization
+    required: false
+    sensitive: true
+    prefix: "Bearer "
+    usage: header
