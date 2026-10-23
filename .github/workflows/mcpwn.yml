@@ -46,7 +46,7 @@ jobs:
           changed_files="$CHANGED_FILES"
 
           if [ "$changed_files" == "[]" ] || [ -z "$changed_files" ]; then
-            echo "file_configs=[]" >> $GITHUB_OUTPUT
+            echo "file_configs=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -71,7 +71,7 @@ jobs:
                   continue
                 fi
 
-                env_config=$(yq eval '.env' "$file" -o=json -I=0)
+                env_config=$(yq eval '[.config[] | select(.usage == "env")]' "$file" -o=json -I=0)
 
                 # Create entry for this file
                 entry=$(jq -n \
@@ -87,7 +87,7 @@ jobs:
           done < <(echo "$changed_files" | jq -r '.[]')
 
           # Output must be on single line for GitHub Actions
-          echo "file_configs=$(echo "$file_configs" | jq -c .)" >> $GITHUB_OUTPUT
+          echo "file_configs=$(echo "$file_configs" | jq -c .)" >> "$GITHUB_OUTPUT"
 
   mcpwn-scan:
     needs: generate-matrix

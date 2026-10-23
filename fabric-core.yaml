@@ -1,6 +1,5 @@
 name: Fabric Core
 entryKey: obot-fabric-core
-serverUserType: multiUser
 shortDescription: Manage Microsoft Fabric workspaces, items, permissions, and capacities with natural language
 description: |
 

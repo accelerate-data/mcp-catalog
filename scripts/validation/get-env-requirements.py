@@ -57,7 +57,7 @@ def get_env_requirements(package_name: str) -> dict:
             "required_env_vars": []
         }
     
-    env_vars = catalog_data.get("env", [])
+    env_vars = [field for field in catalog_data.get("config", []) if field.get("usage") == "env"]
     required_vars = [
         {
             "key": var["key"],
