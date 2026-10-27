@@ -1,0 +1,87 @@
+name: SQL Server
+entryKey: obot-sqlserver
+shortDescription: Explore SQL Server schemas and run SQL through Google's Toolbox prebuilt tools
+description: |
+  Query SQL Server databases in natural language: list tables with schema details and run SQL statements against a database you configure.
+
+  See Google's [official SQL Server Toolbox documentation](https://mcp-toolbox.dev/documentation/connect-to/ides/mssql_mcp/) for setup instructions and current capabilities.
+
+  ## Features
+  - **Schema exploration**: List user tables with detailed schema information (columns, constraints, indexes, triggers), or just table names
+  - **SQL execution**: Run SQL statements against the configured SQL Server database
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **SQL Server Database**: Name of the database to connect to
+  - **SQL Server User**: Database username
+  - **SQL Server Password**: Password for the database user
+
+  **Optional:**
+  - **SQL Server Host**: Hostname or IP address of the SQL Server instance
+  - **SQL Server Port**: Port number of the SQL Server instance
+
+  **Security:**
+  - Use a dedicated SQL Server login with only the privileges the agent should exercise (e.g. SELECT-only on the schemas it may read). Avoid owner, admin, or application-write accounts.
+  - The prebuilt tools expose dynamic SQL and are intended for trusted developer workflows with human-in-the-loop, not production agents.
+
+  ## Credential model
+
+  The deployment owner fixes the host, port, and database; each connecting user supplies their own SQL Server username and password. Per-user values mean each user gets their own Toolbox container rather than sharing one.
+metadata:
+  categories: Databases
+icon: https://avatars.githubusercontent.com/u/16785467?s=48&v=4
+repoURL: https://mcp-toolbox.dev/documentation/connect-to/ides/mssql_mcp/
+toolPreview:
+- name: execute_sql
+  description: Executes a SQL query against the configured SQL Server database.
+  params:
+    sql: SQL statement to execute
+- name: list_tables
+  description: Lists schema information for all or specified tables in the SQL Server database.
+  params:
+    table_names: Optional comma-separated list of table names to filter by
+    output_format: Output format, simple for table names only or detailed for full schema information
+runtime: containerized
+containerizedConfig:
+  image: us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:1.15.0
+  port: 5000
+  path: /mcp
+  args:
+  - --prebuilt
+  - mssql
+  - --address
+  - 0.0.0.0
+  - --port
+  - "5000"
+config:
+  - key: MSSQL_HOST
+    name: SQL Server Host
+    required: false
+    sensitive: false
+    description: Hostname or IP address of the SQL Server instance.
+    usage: env
+  - key: MSSQL_PORT
+    name: SQL Server Port
+    required: false
+    sensitive: false
+    description: Port number of the SQL Server instance.
+    usage: env
+  - key: MSSQL_DATABASE
+    name: SQL Server Database
+    required: true
+    sensitive: false
+    description: Name of the SQL Server database to connect to.
+    usage: env
+  - key: MSSQL_USER
+    name: SQL Server User
+    required: true
+    sensitive: false
+    description: Database username used to connect to SQL Server.
+    usage: env
+  - key: MSSQL_PASSWORD
+    name: SQL Server Password
+    required: true
+    sensitive: true
+    description: Password for the SQL Server database user.
+    usage: env
