@@ -1,0 +1,88 @@
+name: Oracle
+entryKey: obot-oracle
+shortDescription: Explore Oracle schemas and run SQL through Google's Toolbox prebuilt tools
+description: |
+  Query Oracle databases in natural language: list tables with size, row count, and last-analyzed metadata, and run SQL statements against a database you configure.
+
+  See Google's [official Oracle Toolbox documentation](https://mcp-toolbox.dev/documentation/connect-to/ides/oracle_mcp/) for setup instructions and current capabilities.
+
+  ## Features
+  - **Schema exploration**: List user tables with segment size, row count, and last-analyzed date, or filter by a comma-separated list of table names
+  - **SQL execution**: Run SQL statements against the configured Oracle database
+  - **Performance and storage insight**: Inspect active sessions, generate query plans, rank top SQL by resource usage, and monitor tablespace usage and invalid objects
+
+  ## What you'll need to connect
+
+  **Required:**
+  - **Oracle Connection String**: Connection string for the Oracle server (e.g. `hostname:port/servicename`)
+  - **Oracle Username**: Database username
+  - **Oracle Password**: Password for the database user
+
+  **Optional:**
+  - **Oracle Wallet**: Path to the Oracle DB Wallet directory, for databases that use wallet authentication
+  - **Oracle Use OCI**: Set to `true` to use the OCI-based driver for advanced features (requires Oracle Instant Client libraries); defaults to `false` (pure Go driver)
+
+  **Security:**
+  - Use a dedicated Oracle user with only the privileges the agent should exercise (e.g. SELECT on the schemas it may read). Avoid DBA or application-write accounts.
+  - Storage and object-health tools query DBA views that need elevated privileges (e.g. SELECT_CATALOG_ROLE) a standard user may lack.
+  - The prebuilt tools expose dynamic SQL and are intended for trusted developer workflows with human-in-the-loop, not production agents.
+
+  ## Credential model
+
+  The deployment owner fixes the connection string (plus wallet path and OCI flag); each connecting user supplies their own Oracle username and password. Per-user values mean each user gets their own Toolbox container rather than sharing one.
+metadata:
+  categories: Databases
+icon: https://avatars.githubusercontent.com/u/16785467?s=48&v=4
+repoURL: https://mcp-toolbox.dev/documentation/connect-to/ides/oracle_mcp/
+toolPreview:
+- name: execute_sql
+  description: Executes any SQL statement against the configured Oracle database.
+  params:
+    sql: SQL statement to execute
+- name: list_tables
+  description: Lists all user tables in the connected schema, including segment size, row count, and last analyzed date. Filters by a comma-separated list of names.
+  params:
+    table_names_csv: Optional comma-separated list of table names to filter by. If empty, details for all tables in the current user's schema will be listed.
+runtime: containerized
+containerizedConfig:
+  image: us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:1.15.0
+  port: 5000
+  path: /mcp
+  args:
+  - --prebuilt
+  - oracledb
+  - --address
+  - 0.0.0.0
+  - --port
+  - "5000"
+config:
+  - key: ORACLE_CONNECTION_STRING
+    name: Oracle Connection String
+    required: true
+    sensitive: false
+    description: Connection string for the Oracle server (e.g. hostname:port/servicename).
+    usage: env
+  - key: ORACLE_USERNAME
+    name: Oracle Username
+    required: true
+    sensitive: false
+    description: Database username used to connect to Oracle.
+    usage: env
+  - key: ORACLE_PASSWORD
+    name: Oracle Password
+    required: true
+    sensitive: true
+    description: Password for the Oracle database user.
+    usage: env
+  - key: ORACLE_WALLET
+    name: Oracle Wallet
+    required: false
+    sensitive: false
+    description: Path to the Oracle DB Wallet directory, for databases that use wallet authentication.
+    usage: env
+  - key: ORACLE_USE_OCI
+    name: Oracle Use OCI
+    required: false
+    sensitive: false
+    description: Set to true to use the OCI-based driver for advanced features like Oracle Wallet (requires Oracle Instant Client libraries). Defaults to false (pure Go driver).
+    usage: env
