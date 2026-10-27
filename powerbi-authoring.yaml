@@ -1,0 +1,68 @@
+name: Power BI Authoring
+entryKey: obot-powerbi-authoring
+shortDescription: Create and change Power BI semantic models with natural language
+description: |
+  Describe the modeling change you want in natural language and the agent applies it to your Power BI semantic model: adding measures, renaming objects across the model, generating translations, refactoring DAX, or running bulk changes across hundreds of objects.
+
+  See Microsoft's [official Power BI Authoring MCP documentation](https://learn.microsoft.com/en-us/power-bi/developer/mcp/power-bi-authoring-mcp) for setup instructions, authentication requirements, and current capabilities.
+
+  ## Features
+  - **Natural-language authoring**: Create, update, and delete tables, columns, measures, relationships, hierarchies, calculation groups, perspectives, partitions, security roles, and more
+  - **Bulk operations**: Bulk renames, refactoring, translations, and security rules across hundreds of objects at once
+  - **Modeling best practices**: Evaluate a model against best practices and implement the fixes
+  - **DAX validation**: Execute DAX queries to test measures, troubleshoot calculations, and explore data (100,000-row limit)
+
+  ## What you'll need to connect
+
+  Sign in with your Microsoft Entra ID account when prompted; tool calls run under your own permissions and Fabric role-based access control applies. You need Write permission on the semantic model to create or change model objects; with only Build permission the server can only run DAX queries.
+
+  This hosted server works against semantic models in Fabric workspaces. It cannot reach models open in Power BI Desktop or Power BI Project files on disk, and it does not support transactions or trace tools. Back up the model before the agent edits it; changes can be irreversible.
+
+metadata:
+  categories: Data Analytics, Business Intelligence
+icon: https://avatars.githubusercontent.com/u/6154722?s=200&v=4
+repoURL: https://learn.microsoft.com/en-us/power-bi/developer/mcp/power-bi-authoring-mcp
+runtime: remote
+remoteConfig:
+  fixedURL: https://api.fabric.microsoft.com/v1/mcp/powerbi/authoring
+  staticOAuthRequired: true
+
+toolPreview:
+  - name: connection_operations
+    description: 'Connect to a semantic model in a Fabric workspace by model and workspace name; start here before any modeling change.'
+  - name: database_operations
+    description: 'Manage semantic models: list, create, and update models, import and export TMDL folders, and deploy to Fabric.'
+  - name: model_operations
+    description: 'Work with the overall model: get details and stats, create, update, refresh, and rename.'
+  - name: table_operations
+    description: 'Manage tables: create, update, delete, get, list, refresh, and rename.'
+  - name: column_operations
+    description: 'Manage individual table columns: create, update, delete, get, list, and rename.'
+  - name: measure_operations
+    description: 'Manage individual DAX measures: create, update, delete, get, list, rename, and move between tables.'
+  - name: relationship_operations
+    description: 'Handle relationships between tables: create, update, delete, activate and deactivate, and find.'
+  - name: dax_query_operations
+    description: 'Execute and validate DAX queries against the model to test measures and explore data.'
+  - name: partition_operations
+    description: 'Manage table partitions: create, update, delete, and refresh specific partitions.'
+  - name: user_hierarchy_operations
+    description: 'Work with user-defined hierarchies: create, update, and delete levels, and reorder them.'
+  - name: calculation_group_operations
+    description: 'Manage calculation groups and calculation items for time intelligence and other calculations.'
+  - name: security_role_operations
+    description: 'Configure security roles and row-level security table permissions.'
+  - name: perspective_operations
+    description: 'Manage perspectives and their members as filtered views of the model for different audiences.'
+  - name: named_expression_operations
+    description: 'Work with named expressions and Power Query parameters: create, update, delete, get, list, and rename.'
+  - name: function_operations
+    description: 'Manage individual DAX user-defined functions.'
+  - name: culture_operations
+    description: 'Manage cultures for multi-language support: create, update, delete, and get valid culture names.'
+  - name: object_translation_operations
+    description: 'Handle translations for model objects across different cultures and languages.'
+  - name: calendar_operations
+    description: 'Manage calendar objects and time-intelligence column groups.'
+  - name: query_group_operations
+    description: 'Organize and manage query groups for Power Query expressions.'
