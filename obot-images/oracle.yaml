@@ -32,7 +32,7 @@ description: |
   The deployment owner fixes the connection string (plus wallet path and OCI flag); each connecting user supplies their own Oracle username and password. Per-user values mean each user gets their own Toolbox container rather than sharing one.
 metadata:
   categories: Databases
-icon: https://avatars.githubusercontent.com/u/16785467?s=48&v=4
+icon: https://avatars.githubusercontent.com/u/4430336?s=48&v=4
 repoURL: https://mcp-toolbox.dev/documentation/connect-to/ides/oracle_mcp/
 toolPreview:
 - name: execute_sql
