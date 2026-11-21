@@ -32,7 +32,7 @@ description: |
 
 metadata:
   categories: Business
-icon: https://www.paypal.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/paypal.png
 repoURL: https://www.paypal.ai/docs/tools/mcp-quickstart
 runtime: remote
 remoteConfig:

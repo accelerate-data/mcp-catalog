@@ -25,7 +25,7 @@ description: |
 
 metadata:
   categories: DevOps, Cloud Infrastructure, Automation
-icon: https://raw.githubusercontent.com/hashicorp/terraform-mcp-server/5530ac1e1bc26b0e863fcd55634ea550bea18883/public/images/Terraform-LogoMark_onDark.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/terraform.png
 repoURL: https://developer.hashicorp.com/terraform/mcp-server
 
 toolPreview:

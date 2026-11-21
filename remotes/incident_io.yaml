@@ -22,7 +22,7 @@ description: |
 
 metadata:
   categories: Incident Management, Developer Tools, Monitoring
-icon: https://mintcdn.com/incidentio-18bb4170/wAjjotZaBNBJxKDy/incident-icon-alarmalade-light.svg
+icon: https://incident.io/apple-touch-icon.png
 repoURL: https://docs.incident.io/ai/remote-mcp
 runtime: remote
 remoteConfig:

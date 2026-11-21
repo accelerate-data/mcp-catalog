@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Marketing, Data & Analytics, SaaS & API Integrations
-icon: https://ahrefs.com/favicon.ico
+icon: https://ahrefs.com/apple-touch-icon.png
 repoURL: https://docs.ahrefs.com/docs/mcp/reference/introduction
 runtime: remote
 remoteConfig:

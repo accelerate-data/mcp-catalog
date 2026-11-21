@@ -19,7 +19,7 @@ description: |
   Sign in through Legal Data Hunter's OAuth flow. This read-only connector returns legal source material; verify applicability and currency before relying on it for legal decisions.
 metadata:
   categories: Legal Research,Documentation,Search
-icon: https://legaldatahunter.com/static/favicon.svg
+icon: https://legaldatahunter.com/apple-touch-icon.png
 repoURL: https://legaldatahunter.com/docs
 runtime: remote
 remoteConfig:

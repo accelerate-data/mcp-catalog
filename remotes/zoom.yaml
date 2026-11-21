@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Communication, Productivity, SaaS & API Integrations
-icon: https://zoom.us/favicon.ico
+icon: https://zoom.us/apple-touch-icon.png
 repoURL: https://developers.zoom.us/docs/mcp/zoom/
 runtime: remote
 remoteConfig:

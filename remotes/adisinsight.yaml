@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Research, Life Sciences
-icon: https://adisinsight-mcp.springer.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/adisinsight.png
 repoURL: https://adisinsight-mcp.springer.com/
 runtime: remote
 remoteConfig:

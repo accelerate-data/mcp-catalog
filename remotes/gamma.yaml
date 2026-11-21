@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Productivity, Design, SaaS & API Integrations
-icon: https://gamma.app/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/gamma.png
 repoURL: https://developers.gamma.app/mcp
 runtime: remote
 remoteConfig:

@@ -23,7 +23,7 @@ description: |
 
 metadata:
   categories: Financial Services, CRM
-icon: https://d2kxkmjle793l.cloudfront.net/static/lib/eshares/img/favicon.ico
+icon: https://carta.com/apple-touch-icon.png
 repoURL: https://docs.carta.com/crm/docs/carta-crm-mcp
 runtime: remote
 remoteConfig:

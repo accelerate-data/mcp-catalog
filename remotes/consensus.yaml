@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Research, Data & Analytics, Education
-icon: https://consensus.app/favicon.ico
+icon: https://consensus.app/favicon.png
 repoURL: https://docs.consensus.app/docs/mcp
 runtime: remote
 remoteConfig:

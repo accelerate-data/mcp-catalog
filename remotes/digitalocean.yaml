@@ -58,7 +58,7 @@ description: |
 metadata:
   categories: Cloud & Infrastructure, Developer Tools
   allow-multiple: "true"
-icon: https://cdn.brandfetch.io/idvF37rNoN/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B
+icon: https://www.digitalocean.com/_do-www-marketing/646d1eeb/_next/static/media/apple-touch-icon.9537f22a.png
 repoURL: https://docs.digitalocean.com/products/app-platform/reference/mcp/
 runtime: remote
 remoteConfig:

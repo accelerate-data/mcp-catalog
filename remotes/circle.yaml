@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Business, SaaS & API Integrations
-icon: https://circle.so/favicon.ico
+icon: https://circle.so/apple-touch-icon.png
 repoURL: https://api.circle.so/mcp
 runtime: remote
 remoteConfig:

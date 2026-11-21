@@ -19,7 +19,7 @@ description: |
 
 metadata:
   categories: Travel, Search, Shopping
-icon: https://mcp.trivago.com/favicon.ico
+icon: https://www.trivago.com/_static/images/apple-touch-icon_08112023.png
 repoURL: https://mcp.trivago.com/docs
 runtime: remote
 remoteConfig:

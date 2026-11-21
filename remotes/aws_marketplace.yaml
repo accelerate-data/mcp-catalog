@@ -15,7 +15,7 @@ description: |
 
 metadata:
   categories: Cloud, Research, Productivity
-icon: https://docs.aws.amazon.com/assets/images/favicon.ico
+icon: https://docs.aws.amazon.com/apple-touch-icon.png
 repoURL: https://docs.aws.amazon.com/marketplace/latest/developerguide/marketplace-mcp-server.html
 runtime: remote
 remoteConfig:

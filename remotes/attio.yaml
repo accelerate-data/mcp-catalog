@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: CRM, Sales, Productivity
-icon: https://mcp.attio.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/attio.png
 repoURL: https://docs.attio.com/mcp/overview
 runtime: remote
 remoteConfig:

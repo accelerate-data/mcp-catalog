@@ -21,7 +21,7 @@ description: |
   Sign in through Era's OAuth flow. This connector can modify financial context, transaction organization, connections, automations, and billing; carefully review consequential actions before confirming them.
 metadata:
   categories: Personal Finance,Financial Data,Productivity
-icon: https://era.app/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/era.png
 repoURL: https://era.app/help/mcp-server-era-context/
 runtime: remote
 remoteConfig:

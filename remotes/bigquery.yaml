@@ -37,7 +37,7 @@ description: |
   > - **New limits:** Managed queries have documented duration and result-size limits.
 metadata:
   categories: Databases,Data & Analytics
-icon: https://www.svgrepo.com/show/375551/bigquery.svg
+icon: https://www.gstatic.com/cgc/super_cloud_gradient.png
 repoURL: https://cloud.google.com/bigquery/docs/use-bigquery-mcp
 runtime: remote
 remoteConfig:

@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Video & Audio, Productivity, Meetings
-icon: https://mintcdn.com/plaud/NcIGXAbuUj5XMDGP/assets/logo/light.svg
+icon: https://www.plaud.ai/cdn/shop/files/plaud-fa.png?crop=center&height=32&v=1765790183&width=32
 repoURL: https://docs.plaud.ai/plaud-mcp-cli/mcp
 runtime: remote
 remoteConfig:

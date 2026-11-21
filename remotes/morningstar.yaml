@@ -26,7 +26,7 @@ description: |
 
 metadata:
   categories: Finance & Business
-icon: https://www.morningstar.com/favicon.ico
+icon: https://www.morningstar.com/apple-touch-icon.png
 repoURL: https://developer.morningstar.com/direct-web-services/documentation/morningstar-ai-integrations/morningstar-mcp-server/overview
 runtime: remote
 remoteConfig:

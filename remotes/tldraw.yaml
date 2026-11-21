@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Design, Productivity, Developer Tools
-icon: https://www.tldraw.com/favicon.svg
+icon: https://www.tldraw.com/apple-touch-icon.png
 repoURL: https://tldraw.dev/blog/tldraw-mcp-app
 runtime: remote
 remoteConfig:

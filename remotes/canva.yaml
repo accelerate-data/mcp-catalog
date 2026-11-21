@@ -16,7 +16,7 @@ description: |
 
 metadata:
   categories: Design, Productivity
-icon: https://www.canva.com/favicon.ico
+icon: https://static.canva.com/domain-assets/canva/static/images/apple-touch-120x120-1.png
 repoURL: https://www.canva.dev/docs/mcp/
 runtime: remote
 remoteConfig:

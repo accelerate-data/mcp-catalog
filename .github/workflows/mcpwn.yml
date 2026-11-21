@@ -35,6 +35,7 @@ jobs:
         id: extract-config
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Accelerate Data addition: curated entries the scan cannot produce a
           # result for are declared in this file and dropped from the matrix
@@ -72,6 +73,20 @@ jobs:
                 fi
 
                 env_config=$(yq eval '[.config[] | select(.usage == "env")]' "$file" -o=json -I=0)
+
+                # Accelerate Data addition: the scan starts and probes the
+                # container the entry declares. When a pull request changes
+                # only entry metadata (an icon URL, a description), the
+                # declared server is byte-identical to the base revision, so
+                # there is nothing new to scan.
+                if [ -n "$BASE_SHA" ] && base_content=$(git show "$BASE_SHA:$file" 2>/dev/null); then
+                  base_containerized=$(printf '%s' "$base_content" | yq eval '.containerizedConfig' - -o=json -I=0)
+                  base_env=$(printf '%s' "$base_content" | yq eval '[.config[] | select(.usage == "env")]' - -o=json -I=0)
+                  if [ "$base_containerized" == "$containerized_config" ] && [ "$base_env" == "$env_config" ]; then
+                    echo "::notice file=$file::mcpwn scan skipped: the declared server is unchanged from the base revision"
+                    continue
+                  fi
+                fi
 
                 # Create entry for this file
                 entry=$(jq -n \

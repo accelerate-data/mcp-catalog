@@ -18,7 +18,7 @@ description: |
   Sign in through Fellow's OAuth flow. Meeting content remains limited by your Fellow workspace and meeting permissions.
 metadata:
   categories: Meetings,Productivity,Collaboration
-icon: https://cdn.fellow.app/static/images/favicon/favicon.6ab6c0047b33.svg?v=Omr4b3q9Op
+icon: https://framerusercontent.com/images/sW6iuXCfty7TX304Vot3LKcI8.png
 repoURL: https://help.fellow.ai/en/articles/12622641-fellow-s-mcp-server
 runtime: remote
 remoteConfig:

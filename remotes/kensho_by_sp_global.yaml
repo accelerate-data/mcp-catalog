@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Finance, Research
-icon: "https://images.squarespace-cdn.com/content/v1/6970e57a847a982ccab43554/a2fbb6b0-b249-49c4-a6e8-b4a348c748a7/favicon.ico?format=300w"
+icon: https://images.squarespace-cdn.com/content/v1/6970e57a847a982ccab43554/a2fbb6b0-b249-49c4-a6e8-b4a348c748a7/favicon.png
 repoURL: https://docs.kensho.com/llmreadyapi/mcp
 runtime: remote
 remoteConfig:

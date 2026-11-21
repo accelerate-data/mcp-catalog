@@ -22,7 +22,7 @@ description: |
 
 metadata:
   categories: Sales, CRM, Data Enrichment
-icon: https://www.lusha.com/favicon.ico
+icon: https://www.lusha.com/apple-touch-icon.png
 repoURL: https://docs.lusha.com/mcp-docs
 runtime: remote
 remoteConfig:
