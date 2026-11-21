@@ -18,7 +18,7 @@ description: |
   Sign in through Omni's OAuth flow. Queryable data remains limited by your Omni role and content permissions.
 metadata:
   categories: Business Intelligence,Data & Analytics,Databases
-icon: https://omni.co/favicon.ico
+icon: https://omni.co/favicon.png
 repoURL: https://docs.omni.co/ai/mcp
 runtime: remote
 remoteConfig:

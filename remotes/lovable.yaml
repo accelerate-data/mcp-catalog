@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Developer Tools, Productivity, SaaS & API Integrations
-icon: https://lovable.dev/favicon.ico
+icon: https://lovable.dev/apple-touch-icon.png
 repoURL: https://docs.lovable.dev/integrations/lovable-mcp-server
 runtime: remote
 remoteConfig:

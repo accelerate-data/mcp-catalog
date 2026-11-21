@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Project Management, Productivity, Collaboration
-icon: https://images.ctfassets.net/zsv3d0ugroxu/1j6nvsJ8txgcxgy3Vmk4aO/e3b6d56c299ae744c2f4b8109cf1a482/logo-light_Trello_mark_brand_RGB.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/trello.png
 repoURL: https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/
 runtime: remote
 remoteConfig:

@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Business, Legal, SaaS & API Integrations
-icon: https://www.docusign.com/favicon.ico
+icon: https://www.docusign.com/apple-touch-icon.png
 repoURL: https://developers.docusign.com/platform/mcp-server/
 runtime: remote
 remoteConfig:

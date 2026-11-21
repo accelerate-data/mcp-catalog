@@ -32,7 +32,7 @@ description: '**DEPRECATED**: this server is no longer supported by the Obot MCP
 metadata:
   categories: Retrieval & Search, SaaS & API Integrations
   deprecated: "true"
-icon: https://brave.com/static-assets/images/brave-logo-sans-text.svg
+icon: https://brave.com/static-assets/images/cropped-brave_appicon_release-32x32.png
 repoURL: https://github.com/brave/brave-search-mcp-server
 runtime: containerized
 containerizedConfig:

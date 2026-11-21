@@ -22,7 +22,7 @@ description: |
 
 metadata:
   categories: SaaS & API Integrations, Productivity, Developer Tools
-icon: https://composio.dev/favicon.ico
+icon: https://composio.dev/apple-touch-icon.png
 repoURL: https://docs.composio.dev/docs/composio-connect
 runtime: remote
 remoteConfig:

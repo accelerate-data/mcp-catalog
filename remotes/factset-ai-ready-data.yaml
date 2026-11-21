@@ -19,7 +19,7 @@ description: |
   Sign in with FactSet when connecting. Results and available tools depend on your organization’s FactSet subscriptions and data permissions.
 metadata:
   categories: Finance,Market Data,Research
-icon: https://www.factset.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/factset.png
 repoURL: https://developer.factset.com/mcp/factset-ai-ready-data-mcp
 runtime: remote
 remoteConfig:

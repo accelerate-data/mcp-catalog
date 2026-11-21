@@ -23,7 +23,7 @@ description: |
 
 metadata:
   categories: Marketing, Data & Analytics, Communication
-icon: https://developers.klaviyo.com/favicon.ico
+icon: https://www.klaviyo.com/icons/icon-32x32.png
 repoURL: https://developers.klaviyo.com/en/docs/klaviyo_mcp_server
 runtime: remote
 remoteConfig:

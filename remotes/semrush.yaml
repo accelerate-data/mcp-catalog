@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Marketing, Data & Analytics, SaaS & API Integrations
-icon: https://oauth.semrush.com/favicon-light.svg
+icon: https://www.semrush.com/__static__/apple-touch-icon.fe16ae843d17.png
 repoURL: https://developer.semrush.com/api/v4/introduction/semrush-mcp/
 runtime: remote
 remoteConfig:

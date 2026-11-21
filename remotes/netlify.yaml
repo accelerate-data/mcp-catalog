@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Developer Tools, Cloud Infrastructure, DevOps
-icon: https://www.netlify.com/favicon.ico
+icon: https://www.netlify.com/favicon/v2/apple-touch-icon.png
 repoURL: https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/
 runtime: remote
 remoteConfig:

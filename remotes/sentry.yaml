@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Developer Tools, Monitoring & Observability, DevOps
-icon: https://sentry.io/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/sentry.png
 repoURL: https://docs.sentry.io/product/sentry-mcp/
 runtime: remote
 remoteConfig:

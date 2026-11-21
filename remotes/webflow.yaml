@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Developer Tools, Design, SaaS & API Integrations
-icon: https://webflow.com/favicon.ico
+icon: https://webflow.com/apple-touch-icon.png
 repoURL: https://developers.webflow.com/mcp/v1.0.0/reference/overview
 runtime: remote
 remoteConfig:

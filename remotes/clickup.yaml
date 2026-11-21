@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Project Management, Productivity, SaaS & API Integrations
-icon: https://clickup.com/favicon.ico
+icon: https://clickup.com/favicon.png
 repoURL: https://help.clickup.com/hc/en-us/articles/33335772678423-What-is-ClickUp-MCP
 runtime: remote
 remoteConfig:

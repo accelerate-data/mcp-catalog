@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Competitive Intelligence, Marketing, Data & Analytics
-icon: https://www.similarweb.com/favicon.ico
+icon: https://static-us-west-2.similarcdn.com/build/20261120.master.f460967/dist/scripts/lite-app/assets/bf0781432ef84ce62b85.png
 repoURL: https://docs.similarweb.com/api-v5/mcp/mcp-setup
 runtime: remote
 remoteConfig:

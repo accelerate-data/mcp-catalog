@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: File Management, Productivity, SaaS & API Integrations
-icon: "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://dropbox.com&size=256"
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/dropbox.png
 repoURL: https://help.dropbox.com/integrations/connect-dropbox-to-claude
 runtime: remote
 remoteConfig:

@@ -18,7 +18,7 @@ description: |
   Sign in through Dovetail's OAuth flow. Search results and retrieved content remain limited by your workspace permissions.
 metadata:
   categories: Customer Research,Knowledge Management,Productivity
-icon: https://files.readme.io/1de29ed6dd08440231b8155c4071c6939625ffa5952f8b41b6094d518a5a4de9-favicon.svg
+icon: https://dovetail.com/apple-touch-favicon.png
 repoURL: https://developers.dovetail.com/docs/mcp
 runtime: remote
 remoteConfig:

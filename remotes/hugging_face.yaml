@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: AI & Machine Learning, Developer Tools, Research
-icon: https://huggingface.co/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/huggingface.png
 repoURL: https://huggingface.co/settings/mcp
 runtime: remote
 remoteConfig:

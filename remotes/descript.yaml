@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Video & Audio, Content Creation, Productivity
-icon: https://static-cdn.descript.com/web/icons/favicon.svg
+icon: https://static-cdn.descript.com/web/icons/apple-touch-icon.png
 repoURL: https://help.descript.com/api-and-mcp/mcp-custom
 runtime: remote
 remoteConfig:

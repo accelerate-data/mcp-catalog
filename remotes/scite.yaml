@@ -22,7 +22,7 @@ description: |
 
 metadata:
   categories: Research, Education, Life Sciences
-icon: https://cdn.scite.ai/assets/images/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/scite.png
 repoURL: https://scite.ai/mcp
 runtime: remote
 remoteConfig:

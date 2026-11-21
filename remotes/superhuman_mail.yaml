@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Communication, Productivity, SaaS & API Integrations
-icon: https://mcp.mail.superhuman.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/superhuman_mail.png
 repoURL: https://help.superhuman.com/hc/en-us/articles/46005696690317-Superhuman-Mail-MCP-Server
 runtime: remote
 remoteConfig:

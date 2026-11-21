@@ -472,6 +472,28 @@ def check_native_config(manifest: dict, fail) -> None:
                 fail(f"config[{index}].{legacy} is deprecated; use usage")
 
 
+UNSERVABLE_ICON_SUFFIXES = (".svg", ".ico")
+
+
+def check_icon_source(manifest: dict, fail) -> None:
+    """Studio delivers a provider image only as a verified raster representation.
+
+    A declared SVG or ICO can never be delivered: the image route rejects both,
+    so every visit spends a request that ends in the generic fallback (VD-8178).
+    Point the entry at a vendor-hosted PNG/JPEG/GIF/WebP or at a committed file
+    under icons/ instead.
+    """
+    icon = manifest.get("icon")
+    if not isinstance(icon, str) or not icon.strip():
+        return
+    path = urlsplit(icon.strip()).path.lower()
+    if path.endswith(UNSERVABLE_ICON_SUFFIXES):
+        fail(
+            f"icon must be a servable raster (png, jpeg, gif, webp); "
+            f"{icon.strip()!r} is never delivered"
+        )
+
+
 def active_catalog_files(root: Path) -> list[Path]:
     # The repository uses Obot's default *.yaml selection and its ignore file.
     # Recurse so upstream additions outside remotes remain covered as well.
@@ -509,6 +531,10 @@ def validate(root: Path) -> list[str]:
             errors.append(f"{path.name}: manifest must be a mapping")
             continue
         check_native_config(
+            manifest,
+            lambda message, path=path: errors.append(f"{path.name}: {message}"),
+        )
+        check_icon_source(
             manifest,
             lambda message, path=path: errors.append(f"{path.name}: {message}"),
         )

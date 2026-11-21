@@ -18,7 +18,7 @@ description: |
   Create an MCP token in **Account > SMTP & API > API Keys**, then provide it below. This token grants access to your Brevo account; store and rotate it securely.
 metadata:
   categories: Marketing,Email,CRM
-icon: https://corp-backend.brevo.com/wp-content/uploads/2025/07/Brevo_logo.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/brevo.png
 repoURL: https://developers.brevo.com/docs/mcp-protocol
 runtime: remote
 remoteConfig:

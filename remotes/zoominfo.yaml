@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Sales, Marketing, Data & Analytics
-icon: https://raw.githubusercontent.com/Zoominfo/zoominfo-mcp-plugin/main/assets/zoominfo-logomark-red.svg
+icon: https://cws-zoominfo-assets.zoominfo.com/Contentful/favicon/favicon-16x16-1.png
 repoURL: https://github.com/Zoominfo/zoominfo-mcp-plugin
 runtime: remote
 remoteConfig:

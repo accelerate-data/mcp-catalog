@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Design, Productivity, SaaS & API Integrations
-icon: https://lucid.co/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/lucid.png
 repoURL: https://help.lucid.co/hc/en-us/articles/42578801807508-Integrate-Lucid-with-AI-tools-using-the-Lucid-MCP-server
 runtime: remote
 remoteConfig:

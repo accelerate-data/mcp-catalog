@@ -24,7 +24,7 @@ description: |
 
 metadata:
   categories: Marketing, Data & Analytics, Customer Experience
-icon: https://developer.adobe.com/internals/mcp-registry-web-app/v1.11.0/default_card_icon.6bb9c3a2.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/adobe.png
 repoURL: https://experienceleague.adobe.com/en/docs/journey-optimizer/using/content-management/combine/ajo-mcp
 runtime: remote
 remoteConfig:

@@ -16,7 +16,7 @@ description: |
 
 metadata:
   categories: Design, Productivity, Visualization
-icon: https://excalidraw.com/favicon.ico
+icon: https://excalidraw.com/apple-touch-icon.png
 repoURL: https://github.com/excalidraw/excalidraw-mcp
 runtime: remote
 remoteConfig:

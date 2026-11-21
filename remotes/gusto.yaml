@@ -15,7 +15,7 @@ description: |
 
 metadata:
   categories: Human Resources, Financial Services, Data Analytics
-icon: https://files.readme.io/1708f28-gusto-logo.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/gusto.png
 repoURL: https://docs.gusto.com/app-integrations/docs/mcp
 runtime: remote
 remoteConfig:

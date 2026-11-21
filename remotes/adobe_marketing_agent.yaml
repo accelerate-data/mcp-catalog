@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Marketing, Data & Analytics, Customer Experience
-icon: https://developer.adobe.com/internals/mcp-registry-web-app/v1.11.0/default_card_icon.6bb9c3a2.svg
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/adobe.png
 repoURL: https://acrobat.adobe.com/id/urn:aaid:sc:AP:5799e952-be87-4829-b0c4-6f82ca8e8b8b
 runtime: remote
 remoteConfig:

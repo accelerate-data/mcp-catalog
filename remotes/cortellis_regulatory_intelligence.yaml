@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Life Sciences, Research
-icon: https://api.clarivate.com/lifesciences/mcp-regulatory/static/favicon.ico
+icon: https://clarivate.com/wp-content/themes/clarivate/src/favicon/apple-icon-57x57.png
 repoURL: https://api.clarivate.com/lifesciences/mcp-regulatory/documentation
 runtime: remote
 remoteConfig:

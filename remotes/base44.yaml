@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Developer Tools, App Development, Productivity
-icon: https://app.base44.com/favicon.ico
+icon: https://app.base44.com/apple-touch-icon.png
 repoURL: https://docs.base44.com/developers/backend/overview/mcp-server
 runtime: remote
 remoteConfig:

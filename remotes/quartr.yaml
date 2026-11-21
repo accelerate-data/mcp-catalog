@@ -15,7 +15,7 @@ description: |
 
 metadata:
   categories: Financial Services, Research, Data Analytics
-icon: https://mcp.quartr.com/favicon.svg
+icon: https://quartr.com/apple-touch-icon.png
 repoURL: https://mcp.quartr.com/docs
 runtime: remote
 remoteConfig:

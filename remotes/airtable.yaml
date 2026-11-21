@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Databases, Productivity, SaaS & API Integrations
-icon: https://airtable.com/favicon.ico
+icon: https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/airtable.png
 repoURL: https://support.airtable.com/using-the-airtable-mcp-server
 runtime: remote
 remoteConfig:

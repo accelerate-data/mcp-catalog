@@ -18,7 +18,7 @@ description: |
 
 metadata:
   categories: Storage, Document Processing, Productivity
-icon: https://www.box.com/favicon.ico
+icon: https://www.box.com/apple-touch-icon.png
 repoURL: https://developer.box.com/guides/box-mcp/
 runtime: remote
 remoteConfig:

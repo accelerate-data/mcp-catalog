@@ -13,7 +13,7 @@ description: |
   before it becomes available to their AgentSessions.
 metadata:
   categories: Communication, Developer Tools
-icon: https://resend.com/favicon.ico
+icon: https://avatars.githubusercontent.com/u/109384852?s=48&v=4
 repoURL: https://github.com/resend/resend-mcp
 runtime: remote
 remoteConfig:

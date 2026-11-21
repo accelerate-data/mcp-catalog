@@ -126,6 +126,32 @@ class CuratedEntryContractTest(unittest.TestCase):
         ]
         self.assertEqual(self.validate_with("other.yaml", {"config": config}), [])
 
+    def test_rejects_icon_that_studio_never_serves(self) -> None:
+        # Studio's provider-image route accepts PNG, JPEG, GIF and WebP only, so
+        # a declared SVG or ICO always ends in a failed request and the generic
+        # fallback (VD-8178).
+        for icon in (
+            "https://example.com/favicon.ico",
+            "https://example.com/logo.svg",
+            "https://example.com/logo.SVG",
+            "https://cdn.example.com/logo.svg?token=1",
+        ):
+            with self.subTest(icon=icon):
+                errors = self.validate_with("other.yaml", {"config": [], "icon": icon})
+                self.assertTrue(
+                    any("icon must be a servable raster" in error for error in errors),
+                    errors,
+                )
+
+    def test_accepts_servable_icon_forms(self) -> None:
+        for icon in (
+            "https://example.com/apple-touch-icon.png",
+            "https://example.com/favicon-32x32.png?x=1",
+            "https://raw.githubusercontent.com/accelerate-data/mcp-catalog/main/icons/adobe.png",
+        ):
+            with self.subTest(icon=icon):
+                self.assertEqual(self.validate_with("other.yaml", {"config": [], "icon": icon}), [])
+
     def test_resend_requires_owner_supplied_bearer_header(self) -> None:
         cases = [
             (

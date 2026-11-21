@@ -20,7 +20,7 @@ description: |
 
 metadata:
   categories: Legal, Search, Research
-icon: https://mcp.courtlistener.com/favicon.svg
+icon: https://mcp.courtlistener.com/apple-touch-icon.png
 repoURL: https://github.com/freelawproject/courtlistener-api-client/blob/main/MCP_README.md
 runtime: remote
 remoteConfig:

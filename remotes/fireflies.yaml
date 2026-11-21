@@ -17,7 +17,7 @@ description: |
 
 metadata:
   categories: Communication, Productivity, SaaS & API Integrations
-icon: https://fireflies.ai/favicon.ico
+icon: https://fireflies.ai/apple-touch-icon.png
 repoURL: https://guide.fireflies.ai/articles/8272956938-learn-about-the-fireflies-mcp-server-model-context-protocol
 runtime: remote
 remoteConfig:

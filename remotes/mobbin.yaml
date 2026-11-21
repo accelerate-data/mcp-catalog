@@ -21,7 +21,7 @@ description: |
 
 metadata:
   categories: Design, Research, Developer Tools
-icon: https://storage.googleapis.com/assets.mobbin.com/claude.ai/logo.svg
+icon: https://mobbin.com/mobbin-marketing-pages/images/apple-touch-icon.png
 repoURL: https://mobbin.com/mcp
 runtime: remote
 remoteConfig:
