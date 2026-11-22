@@ -157,38 +157,47 @@ entries:
       configuration, which validates that every variable that configuration
       declares is present before it starts and exits with `unable to parse
       prebuilt tool configuration for 'oracledb': error parsing environment
-      variables: environment variables not found`. The database connection
-      string and username/password are operator-supplied.
+      variables: environment variables not found`. Supplying placeholder
+      values is not enough: the prebuilt configuration opens the database
+      connection at startup and fails with `unable to connect to Oracle
+      successfully` when the host does not resolve. The connection string and
+      username/password are operator-supplied and address a real database.
     alternative: >-
       The entry declares its connection inputs as required and marks the
-      password sensitive, so a deployment cannot start this server without
-      them. The image was verified to accept its declared /mcp path; only the
-      prebuilt configuration's required variables are missing under the scan.
+      password sensitive, so a deployment cannot start this server without a
+      reachable Oracle database. There is no path to automated coverage here
+      short of a live Oracle instance, so the merge gate is the contract
+      review of those inputs.
 
   - file: obot-images/sqlserver.yaml
     scan: manual
     reason: >-
-      Same image and failure as obot-images/oracle.yaml: the `mssql` prebuilt
-      configuration refuses to start until its database variables are present,
-      and those are operator-supplied.
+      Same image and same prebuilt-configuration startup as
+      obot-images/oracle.yaml: the `mssql` configuration refuses to start until
+      its database variables are present, and then opens the database
+      connection at startup. The database address and credentials are
+      operator-supplied and address a real server.
     alternative: >-
       The entry declares its database inputs as required and marks the
-      password sensitive. The image was verified to accept its declared /mcp
-      path; only the prebuilt configuration's required variables are missing
-      under the scan.
+      password sensitive. There is no path to automated coverage here short of
+      a live SQL Server instance, so the merge gate is the contract review of
+      those inputs.
 
   - file: obot-images/tableau.yaml
     scan: manual
     reason: >-
       The image exits with `OAUTH_ISSUER must be set when TRANSPORT is
       http` and, once that is satisfied, `The environment variable SERVER is
-      not set`. Both the Tableau site and the personal access token are
-      operator-supplied.
+      not set`. Supplying placeholder values is not enough: it then fetches
+      server info from the Tableau site and exits with `Fatal error
+      initializing server info`. The site and personal access token are
+      operator-supplied and address a real Tableau deployment.
     alternative: >-
       The entry declares SERVER, PAT_NAME and PAT_VALUE as required and marks
-      the token sensitive. The image was verified to bind its declared
-      /tableau-mcp path; only the site identity and token are missing under
-      the scan.
+      the token sensitive, so a deployment cannot start this server without a
+      reachable Tableau site. There is no path to automated coverage here
+      short of a live site, so the merge gate is the contract review of those
+      inputs.
 
   - file: obot-images/wordpress.yaml
     scan: manual
@@ -199,19 +208,24 @@ entries:
     alternative: >-
       The entry declares its site and credentials as required and marks the
       password sensitive, so a deployment cannot start this server without
-      them. The image was verified to reach its own startup check; only the
-      required variables are missing under the scan.
+      them. The image's own log names WORDPRESS_SITE as the missing variable;
+      the site, username and password all remain operator-supplied.
 
   - file: obot-images/gitlab.yaml
     scan: manual
     reason: >-
-      The image exits with `GITLAB_PERSONAL_ACCESS_TOKEN environment variable
-      is not set` and `Either set GITLAB_PERSONAL_ACCESS_TOKEN or enable OAuth
-      with GITLAB_USE_OAUTH=true`. The token is operator-supplied.
+      The image exits with status 1 before binding its port and writes nothing
+      to its own log, so there is no output to attribute to a missing input.
+      The weekly fan-out reported `GITLAB_PERSONAL_ACCESS_TOKEN environment
+      variable is not set` and `Either set GITLAB_PERSONAL_ACCESS_TOKEN or
+      enable OAuth with GITLAB_USE_OAUTH=true`; that text is consistent with an
+      operator-supplied token being required, but the container's silence means
+      the exact gate is unconfirmed here.
     alternative: >-
       The entry declares GITLAB_PERSONAL_ACCESS_TOKEN as a required, sensitive
-      input. The image was verified to reach its own startup check; only the
-      token is missing under the scan.
+      input. The merge gate is the contract review of that input; the image's
+      silent exit should be resolved before this entry is offered for new
+      installs.
 
   - file: obot-images/azure.yaml
     scan: manual
@@ -411,12 +425,12 @@ entries:
   - file: obot-images/slack.yaml
     scan: manual
     reason: >-
-      The image reads SLACK_BOT_TOKEN directly rather than through an mmmcp
-      wrapper, and without it the HTTP listener closes every request before it
-      can answer initialize on the declared /mcp path. The token is
-      operator-supplied.
+      The server starts and binds its declared /mcp path, then fails the first
+      MCP request with `Failed to initialize server: Error: SLACK_BOT_TOKEN is
+      not set` and exits. The token is operator-supplied, and the image reads
+      it directly rather than through an mmmcp wrapper.
     alternative: >-
       The entry declares SLACK_BOT_TOKEN as a required, sensitive input, so a
-      deployment cannot start this server without it. The image was verified
-      to bind its declared /mcp path once a token was present; only the token
-      is missing under the scan.
+      deployment cannot start this server without it. With the token present
+      the image answers initialize on its declared /mcp path with 200; only
+      the token is missing under the scan.
