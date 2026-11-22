@@ -145,10 +145,17 @@ jobs:
           # Accelerate Data addition: `docker run -d` returns as soon as the
           # container is created and a fixed `sleep 2` does not cover an image
           # that needs longer to bind, so the scanner used to connect too
-          # early and die with ConnectionRefusedError. Wait for the published
-          # port, bounded, and report the container's own logs when it exits.
-          READY_TIMEOUT_SECONDS=60
-          deadline=$(( SECONDS + READY_TIMEOUT_SECONDS ))
+          # early and die with ConnectionRefusedError. Wait for the endpoint,
+          # bounded, and report the container's own logs when it exits.
+          #
+          # Readiness is an HTTP response, not a TCP connect: Docker's userland
+          # proxy completes the handshake even when nothing inside the
+          # container is listening, so a connect test succeeds against a
+          # container that has not started serving.
+          # Overridable so a test can exercise the timeout without waiting.
+          READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}
+          started=$SECONDS
+          deadline=$(( started + READY_TIMEOUT_SECONDS ))
           while (( SECONDS < deadline )); do
             state=$(docker inspect --format '{{.State.Status}}' "${MCP_SERVER_NAME}" 2>/dev/null || echo missing)
             if [[ "$state" == "exited" || "$state" == "dead" || "$state" == "missing" ]]; then
@@ -156,15 +163,18 @@ jobs:
               docker logs "${MCP_SERVER_NAME}" 2>&1 || true
               exit 1
             fi
-            if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
-              exec 3>&- 3<&-
-              echo "Container is accepting connections on port $PORT."
+            # curl prints 000 itself when it cannot connect, so the exit
+            # status is discarded rather than substituting a second value.
+            status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
+              "http://127.0.0.1:${PORT}${MCP_PATH:-/}" 2>/dev/null || true)
+            if [[ "$status" != "000" ]]; then
+              echo "Container answered HTTP $status after $(( SECONDS - started ))s."
               exit 0
             fi
             sleep 1
           done
 
-          echo "::error::Container ${MCP_SERVER_NAME} did not accept connections on port $PORT within ${READY_TIMEOUT_SECONDS}s."
+          echo "::error::Container ${MCP_SERVER_NAME} did not answer HTTP on port $PORT within ${READY_TIMEOUT_SECONDS}s."
           docker logs "${MCP_SERVER_NAME}" 2>&1 || true
           exit 1
 

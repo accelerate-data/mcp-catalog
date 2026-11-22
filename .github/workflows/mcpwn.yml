@@ -197,18 +197,30 @@ jobs:
 
       - name: Wait for the mcp server to accept connections
         env:
+          # Supplied by the start step through GITHUB_ENV; the default keeps the
+          # step runnable on its own.
+          MCP_PATH: ${{ matrix.server.containerizedConfig.path || '/' }}
           PORT: "8080"
         run: |
           # Accelerate Data addition: `docker run -d` returns as soon as the
           # container is created, so the scanner used to connect about a
           # second later and died with ConnectionRefusedError on an image that
-          # needed several seconds to bind. Wait for the published port,
-          # bounded, and report the container's own logs when it exits instead
-          # of leaving the scanner to report a refused connection.
+          # needed several seconds to bind. Wait for the endpoint, bounded, and
+          # report the container's own logs when it exits instead of leaving
+          # the scanner to report a refused connection.
           #
-          # A TCP accept is not proof the MCP endpoint answers: the declared
-          # path can still return 404, which the scan reports plainly.
-          READY_TIMEOUT_SECONDS=60
+          # Readiness is an HTTP response, not a TCP connect. Docker's userland
+          # proxy publishes the host port and completes the handshake even when
+          # nothing inside the container is listening, so a connect test
+          # succeeds against a container that has not started serving.
+          #
+          # Any HTTP status counts: this proves the server is answering, while
+          # the declared path is what the scan reports on, and an entry that
+          # serves somewhere other than its declared path should surface as the
+          # scan's 404 rather than as a readiness timeout.
+          # Overridable so a test can exercise the timeout without waiting.
+          MCP_PATH="${MCP_PATH:-/}"
+          READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}
           started=$SECONDS
           deadline=$(( started + READY_TIMEOUT_SECONDS ))
           while (( SECONDS < deadline )); do
@@ -218,15 +230,18 @@ jobs:
               docker logs mcpwn-target 2>&1 || true
               exit 1
             fi
-            if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
-              exec 3>&- 3<&-
-              echo "Container is accepting connections on port $PORT after $(( SECONDS - started ))s."
+            # curl prints 000 itself when it cannot connect, so the exit
+            # status is discarded rather than substituting a second value.
+            status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
+              "http://127.0.0.1:${PORT}${MCP_PATH}" 2>/dev/null || true)
+            if [[ "$status" != "000" ]]; then
+              echo "Container answered HTTP $status on ${MCP_PATH} after $(( SECONDS - started ))s."
               exit 0
             fi
             sleep 1
           done
 
-          echo "::error::Container did not accept connections on port $PORT within ${READY_TIMEOUT_SECONDS}s."
+          echo "::error::Container did not answer HTTP on port $PORT within ${READY_TIMEOUT_SECONDS}s."
           docker logs mcpwn-target 2>&1 || true
           exit 1
 

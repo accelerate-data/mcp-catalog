@@ -267,17 +267,72 @@ class ScanCoverageContractTest(unittest.TestCase):
             if step.get("name") == "Wait for the mcp server to accept connections"
         )
 
-        self.assertIn("READY_TIMEOUT_SECONDS=60", wait)
+        self.assertIn("READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}", wait)
         # A container that exits is reported with its own logs, not left to the
         # scanner to describe as a refused connection.
         self.assertIn("docker logs mcpwn-target", wait)
         self.assertIn("exited", wait)
+        # Readiness must be an HTTP response. Docker's userland proxy accepts a
+        # TCP connection to the published port even when nothing inside the
+        # container is listening, so a connect test passes against a container
+        # that has not started serving.
+        self.assertIn("curl", wait)
+        self.assertNotIn("/dev/tcp/", wait)
         # The wait must be ordered before the scan.
         names = [step.get("name") for step in steps]
         self.assertLess(
             names.index("Wait for the mcp server to accept connections"),
             names.index("Run mcpwn scan"),
         )
+
+    def test_readiness_wait_ignores_a_bare_tcp_accept(self) -> None:
+        """A refused HTTP endpoint must not be read as ready.
+
+        Docker's userland proxy completes the TCP handshake on a published
+        port even when nothing inside the container is listening, so a
+        connect-based probe passes against a container that has not started
+        serving. Readiness has to come from an HTTP response.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            log = temp / "container.log"
+            log.write_text("still starting\n")
+            docker = temp / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, pathlib, sys\n"
+                "if sys.argv[1] == 'inspect':\n"
+                "    print('running')\n"
+                "elif sys.argv[1] == 'logs':\n"
+                "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            # curl reports 000 — the endpoint is not answering — and must not be
+            # mistaken for success just because the container is "running".
+            curl = temp / "curl"
+            curl.write_text("#!/usr/bin/env python3\nprint('000')\n")
+            curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "LOGS": str(log),
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+                "READY_TIMEOUT_SECONDS": "2",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", wait], env=env, capture_output=True, text=True
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("did not answer HTTP", result.stderr + result.stdout)
 
     def test_readiness_wait_fails_when_the_container_exits(self) -> None:
         """The wait reports the container's logs and fails when it exited."""
@@ -306,11 +361,16 @@ class ScanCoverageContractTest(unittest.TestCase):
                 "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
             )
             docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            # The endpoint never answers, so the wait must run out and fail.
+            curl = temp / "curl"
+            curl.write_text("#!/usr/bin/env python3\nimport sys\nprint('000')\n")
+            curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
             env = os.environ | {
                 "CALLS": str(calls),
                 "LOGS": str(log),
                 "PATH": f"{temp}:{os.environ['PATH']}",
                 "PORT": "8080",
+                "READY_TIMEOUT_SECONDS": "2",
             }
 
             result = subprocess.run(
@@ -345,8 +405,10 @@ class ScanCoverageContractTest(unittest.TestCase):
         self.assertNotIn("MCP_PATH", by_name["Wait for the mcp server to accept connections"].get("env", {}))
 
         wait = by_name["Wait for the mcp server to accept connections"]["run"]
-        self.assertIn("READY_TIMEOUT_SECONDS=60", wait)
+        self.assertIn("READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}", wait)
         self.assertIn("docker logs", wait)
+        self.assertIn("curl", wait)
+        self.assertNotIn("/dev/tcp/", wait)
         self.assertNotIn("sleep 2\n", wait)
 
         # A static value is forwarded as KEY=VALUE, not as a bare key.
