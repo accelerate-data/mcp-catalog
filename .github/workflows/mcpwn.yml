@@ -72,7 +72,18 @@ jobs:
                   continue
                 fi
 
-                env_config=$(yq eval '[.config[] | select(.usage == "env")]' "$file" -o=json -I=0)
+                # Accelerate Data addition: the scan supplies the entry's
+                # static config values and nothing else. A required input
+                # whose value only the operator can provide stays unset, which
+                # is why an entry that cannot start without one is declared
+                # `manual` here rather than left to fail the scan. Static
+                # values are forwarded as KEY=VALUE; forwarding a bare KEY
+                # would read the runner's environment instead, which never
+                # holds this input and would start the image with an empty
+                # variable.
+                env_config=$(yq eval \
+                  '[.config[] | select(.usage == "env") | select(.value != null)]' \
+                  "$file" -o=json -I=0)
 
                 # Accelerate Data addition: the scan starts and probes the
                 # container the entry declares. When a pull request changes
@@ -81,7 +92,7 @@ jobs:
                 # there is nothing new to scan.
                 if [ -n "$BASE_SHA" ] && base_content=$(git show "$BASE_SHA:$file" 2>/dev/null); then
                   base_containerized=$(printf '%s' "$base_content" | yq eval '.containerizedConfig' - -o=json -I=0)
-                  base_env=$(printf '%s' "$base_content" | yq eval '[.config[] | select(.usage == "env")]' - -o=json -I=0)
+                  base_env=$(printf '%s' "$base_content" | yq eval '[.config[] | select(.usage == "env") | select(.value != null)]' - -o=json -I=0)
                   if [ "$base_containerized" == "$containerized_config" ] && [ "$base_env" == "$env_config" ]; then
                     echo "::notice file=$file::mcpwn scan skipped: the declared server is unchanged from the base revision"
                     continue
@@ -144,6 +155,7 @@ jobs:
           ARGS_JSON: ${{ toJson(matrix.server.containerizedConfig.args) }}
           ENV_JSON: ${{ toJson(matrix.server.env) }}
           IMAGE: ${{ matrix.server.containerizedConfig.image }}
+          MCP_PATH: ${{ matrix.server.containerizedConfig.path }}
           PORT: ${{ matrix.server.containerizedConfig.port }}
         run: |
           if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
@@ -154,15 +166,27 @@ jobs:
             echo "Container image must not be empty" >&2
             exit 1
           fi
+          # Accelerate Data addition: an entry declares where its MCP endpoint
+          # lives, and several declare something other than the root. The scan
+          # probes the declared path, so it is carried into the next step
+          # rather than defaulting to "/".
+          if [[ -z "$MCP_PATH" ]]; then
+            MCP_PATH="/"
+          fi
+          echo "MCP_PATH=$MCP_PATH" >> "$GITHUB_ENV"
 
           docker_args=(run -d --name mcpwn-target -p "8080:$PORT")
-          while IFS= read -r -d '' key; do
+          # Each forwarded input arrives as a key/value pair. The matrix step
+          # already keeps only inputs that carry a static value, so the value
+          # is always present; forwarding a bare key would read the runner's
+          # environment and start the image with an empty variable.
+          while IFS= read -r -d '' key && IFS= read -r -d '' value; do
             if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
               echo "Invalid environment variable name: $key" >&2
               exit 1
             fi
-            docker_args+=(-e "$key")
-          done < <(jq --raw-output0 '.[]?.key' <<< "$ENV_JSON")
+            docker_args+=(-e "$key=$value")
+          done < <(jq --raw-output0 '.[]? | .key, .value' <<< "$ENV_JSON")
 
           server_args=()
           while IFS= read -r -d '' arg; do
@@ -171,9 +195,44 @@ jobs:
 
           docker "${docker_args[@]}" "$IMAGE" "${server_args[@]}"
 
+      - name: Wait for the mcp server to accept connections
+        env:
+          PORT: "8080"
+        run: |
+          # Accelerate Data addition: `docker run -d` returns as soon as the
+          # container is created, so the scanner used to connect about a
+          # second later and died with ConnectionRefusedError on an image that
+          # needed several seconds to bind. Wait for the published port,
+          # bounded, and report the container's own logs when it exits instead
+          # of leaving the scanner to report a refused connection.
+          #
+          # A TCP accept is not proof the MCP endpoint answers: the declared
+          # path can still return 404, which the scan reports plainly.
+          READY_TIMEOUT_SECONDS=60
+          started=$SECONDS
+          deadline=$(( started + READY_TIMEOUT_SECONDS ))
+          while (( SECONDS < deadline )); do
+            state=$(docker inspect --format '{{.State.Status}}' mcpwn-target 2>/dev/null || echo missing)
+            if [[ "$state" == "exited" || "$state" == "dead" || "$state" == "missing" ]]; then
+              echo "::error::Container exited before accepting connections on port $PORT (state: $state)."
+              docker logs mcpwn-target 2>&1 || true
+              exit 1
+            fi
+            if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+              exec 3>&- 3<&-
+              echo "Container is accepting connections on port $PORT after $(( SECONDS - started ))s."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Container did not accept connections on port $PORT within ${READY_TIMEOUT_SECONDS}s."
+          docker logs mcpwn-target 2>&1 || true
+          exit 1
+
       - name: Run mcpwn scan
         run: |
-          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode http://localhost:8080
+          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode "http://localhost:8080${MCP_PATH}"
 
       - name: Checkout mcp-catalog
         uses: actions/checkout@v6

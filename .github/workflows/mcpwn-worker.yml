@@ -21,9 +21,14 @@ on:
         required: true
         type: string
       env_b64:
-        description: "Base64 JSON object of env"
+        description: "Base64 JSON array of env entries (key/value objects)"
         required: true
         type: string
+      path:
+        description: "MCP endpoint path the entry declares"
+        required: false
+        type: string
+        default: "/"
       workflow_name:
         description: "Custom workflow name"
         required: false
@@ -78,57 +83,96 @@ jobs:
         env:
           ARGS_B64: ${{ inputs.args_b64 }}
           ENV_B64: ${{ inputs.env_b64 }}
+          IMAGE: ${{ inputs.image }}
+          MCP_PATH: ${{ inputs.path }}
+          TARGET_PORT: ${{ inputs.port }}
         run: |
           set -euo pipefail
 
-          ARGS_JSON=$(echo "$ARGS_B64" | base64 -d)
-          ENV_JSON=$(echo "$ENV_B64"  | base64 -d)
+          ARGS_JSON=$(echo "$ARGS_B64" | base64 -d | jq -c .)
+          ENV_JSON=$(echo "$ENV_B64"  | base64 -d | jq -c .)
 
-          # Build env flags from object -> -e KEY=VALUE
-          if [ "$ENV_JSON" != "null" ] && [ -n "$ENV_JSON" ]; then
-            DOCKER_ENV_ARGS=$(echo "$ENV_JSON" | jq -r 'map("-e " + .key) | join(" ")')
-            echo "DOCKER_ENV_ARGS=$DOCKER_ENV_ARGS" >> $GITHUB_ENV
-          else
-            echo "DOCKER_ENV_ARGS=" >> $GITHUB_ENV
+          if [[ ! "$TARGET_PORT" =~ ^[0-9]+$ ]] || (( TARGET_PORT < 1 || TARGET_PORT > 65535 )); then
+            echo "Invalid container port: $TARGET_PORT" >&2
+            exit 1
+          fi
+          if [[ -z "$IMAGE" ]]; then
+            echo "Container image must not be empty" >&2
+            exit 1
           fi
 
-          # Build args string from array -> "a b c"
-          if [ "$ARGS_JSON" != "null" ] && [ -n "$ARGS_JSON" ]; then
-            ARGS_STRING=$(echo "$ARGS_JSON" | jq -r 'join(" ")')
-            echo "ARGS_STRING=$ARGS_STRING" >> $GITHUB_ENV
-          else
-            echo "ARGS_STRING=" >> $GITHUB_ENV
-          fi
+          # Accelerate Data addition: dispatch inputs are carried in the
+          # environment rather than interpolated into shell source, so a value
+          # can never terminate a quote and become a command. MCP_PATH reaches
+          # the later steps through GITHUB_ENV because the scan step needs it
+          # too, not only the readiness wait.
+          {
+            echo "ENV_JSON=$ENV_JSON"
+            echo "ARGS_JSON=$ARGS_JSON"
+            echo "IMAGE=$IMAGE"
+            echo "TARGET_PORT=$TARGET_PORT"
+            echo "MCP_PATH=${MCP_PATH:-/}"
+          } >> "$GITHUB_ENV"
 
       - name: Start mcp server
         env: ${{ secrets }}
         run: |
-          docker run -d --name ${MCP_SERVER_NAME} \
-            -p 8080:${{ inputs.port }} \
-            ${DOCKER_ENV_ARGS} \
-            ${{ inputs.image }} ${ARGS_STRING}
+          set -euo pipefail
 
-      - name: Verify container is running
+          docker_args=(run -d --name "${MCP_SERVER_NAME}" -p "8080:${TARGET_PORT}")
+          # The fan-out sends every env-typed entry, so an operator-supplied
+          # input arrives without a static value. Only the ones carrying a
+          # value are forwarded, as KEY=VALUE: a bare KEY would read the
+          # runner's environment, which never holds the entry's value, and
+          # would start the image with an empty variable.
+          while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+            docker_args+=(-e "$key=$value")
+          done < <(jq --raw-output0 '.[]? | select(.value != null) | .key, .value' <<< "${ENV_JSON:-[]}")
+
+          server_args=()
+          while IFS= read -r -d '' arg; do
+            server_args+=("$arg")
+          done < <(jq --raw-output0 '.[]?' <<< "${ARGS_JSON:-[]}")
+
+          docker "${docker_args[@]}" "$IMAGE" ${server_args[@]+"${server_args[@]}"}
+
+      - name: Wait for the mcp server to accept connections
+        env:
+          PORT: "8080"
         run: |
           set -euo pipefail
 
-          # Give container a moment to start
-          sleep 2
+          # Accelerate Data addition: `docker run -d` returns as soon as the
+          # container is created and a fixed `sleep 2` does not cover an image
+          # that needs longer to bind, so the scanner used to connect too
+          # early and die with ConnectionRefusedError. Wait for the published
+          # port, bounded, and report the container's own logs when it exits.
+          READY_TIMEOUT_SECONDS=60
+          deadline=$(( SECONDS + READY_TIMEOUT_SECONDS ))
+          while (( SECONDS < deadline )); do
+            state=$(docker inspect --format '{{.State.Status}}' "${MCP_SERVER_NAME}" 2>/dev/null || echo missing)
+            if [[ "$state" == "exited" || "$state" == "dead" || "$state" == "missing" ]]; then
+              echo "::error::Container ${MCP_SERVER_NAME} exited before accepting connections on port $PORT (state: $state)."
+              docker logs "${MCP_SERVER_NAME}" 2>&1 || true
+              exit 1
+            fi
+            if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+              exec 3>&- 3<&-
+              echo "Container is accepting connections on port $PORT."
+              exit 0
+            fi
+            sleep 1
+          done
 
-          # Check if container is still running
-          if ! docker ps --filter "name=${MCP_SERVER_NAME}" --format "{{.Names}}" | grep -q "${MCP_SERVER_NAME}"; then
-            echo "ERROR: Container ${MCP_SERVER_NAME} exited unexpectedly"
-            echo "Container logs:"
-            docker logs ${MCP_SERVER_NAME} || true
-            exit 1
-          fi
-
-          echo "Container ${MCP_SERVER_NAME} is running"
+          echo "::error::Container ${MCP_SERVER_NAME} did not accept connections on port $PORT within ${READY_TIMEOUT_SECONDS}s."
+          docker logs "${MCP_SERVER_NAME}" 2>&1 || true
+          exit 1
 
       - name: Run mcpwn scan
         run: |
           set -euo pipefail
-          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode http://localhost:8080
+          MCP_PATH="${MCP_PATH:-/}"
+          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode "http://localhost:8080${MCP_PATH}"
 
       - name: Upload SARIF artifact
         if: always()
