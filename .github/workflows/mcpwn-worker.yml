@@ -120,6 +120,26 @@ jobs:
             exit 1
           fi
 
+          # The payloads must be the shape the unpacking loop expects. That
+          # loop reads them through a process substitution, where a jq failure
+          # is discarded, so a wrong shape would start the container with no
+          # inputs instead of failing. Validate both here for the same reason
+          # the pull-request lane does.
+          if ! jq -e 'type == "null" or (type == "array" and all(.[];
+                type != "array" and type != "object"))' \
+            <<< "${ARGS_JSON:-[]}" >/dev/null 2>&1; then
+            echo "ARGS_JSON must be null or an array of scalars: $ARGS_JSON" >&2
+            exit 1
+          fi
+          if ! jq -e 'type == "null" or (type == "array" and all(.[];
+                type == "object"
+                and (.key | type == "string")
+                and (.value | type != "array" and type != "object")))' \
+            <<< "${ENV_JSON:-[]}" >/dev/null 2>&1; then
+            echo "ENV_JSON must be null or an array of key/value entries: $ENV_JSON" >&2
+            exit 1
+          fi
+
           # Accelerate Data addition: dispatch inputs are carried in the
           # environment rather than interpolated into shell source, so a value
           # can never terminate a quote and become a command. MCP_PATH reaches

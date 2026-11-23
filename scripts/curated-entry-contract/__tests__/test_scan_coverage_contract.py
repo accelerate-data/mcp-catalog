@@ -389,19 +389,37 @@ class ScanCoverageContractTest(unittest.TestCase):
             self.assertIn("Invalid MCP endpoint path", result.stderr)
             self.assertNotIn("INJECTED", github_env.read_text())
 
-    def test_start_step_accepts_an_entry_that_declares_no_args(self) -> None:
-        """`toJson` of an absent property is the string "null".
+    def test_start_step_accepts_every_args_payload_in_the_catalog(self) -> None:
+        """The guard must accept the payload every entry actually produces.
 
-        Four containerized entries declare no `args` at all, so the payload the
-        matrix produces for them is `null`. Rejecting that stops the container
-        from starting and breaks exactly the entries the scan covers.
+        `toJson` of an absent property is the string "null"; an unquoted YAML
+        number arrives as a JSON number. Both occur in this catalog, and
+        rejecting either stops a real entry from starting — terraform declares
+        `8080` as a number and is one of the two entries the scan covers.
         """
-        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        root = Path.cwd()
+        # The matrix emits `toJson` of the declared args, and "null" when the
+        # entry declares none.
+        payloads = {"<no args>": "null"}
+        for path in sorted(root.rglob("*.yaml")):
+            if any(part.startswith(".") for part in path.relative_to(root).parts):
+                continue
+            manifest = yaml.safe_load(path.read_text())
+            if not (isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            )):
+                continue
+            args = manifest["containerizedConfig"].get("args")
+            payloads[f"{path.name}:{json.dumps(args)}"] = json.dumps(
+                [] if args is None else args
+            )
+
+        workflow = yaml.safe_load((root / ".github/workflows/mcpwn.yml").read_text())
         steps = workflow["jobs"]["mcpwn-scan"]["steps"]
         start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
 
-        for args_payload in ("null", "[]"):
-            with self.subTest(args=args_payload):
+        for label, payload in payloads.items():
+            with self.subTest(entry=label):
                 with tempfile.TemporaryDirectory() as directory:
                     temp = Path(directory)
                     capture = temp / "argv.json"
@@ -413,7 +431,7 @@ class ScanCoverageContractTest(unittest.TestCase):
                     )
                     docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
                     env = os.environ | {
-                        "ARGS_JSON": args_payload,
+                        "ARGS_JSON": payload,
                         "CAPTURE": str(capture),
                         "ENV_JSON": json.dumps([]),
                         "GITHUB_ENV": str(temp / "github_env"),
@@ -430,8 +448,10 @@ class ScanCoverageContractTest(unittest.TestCase):
                         text=True,
                     )
 
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(json.loads(capture.read_text())[-1], "example.invalid/image:tag")
+                    self.assertEqual(result.returncode, 0, f"{label}: {result.stderr}")
+                    # The image is followed by the forwarded args, so assert it
+                    # was invoked rather than that it came last.
+                    self.assertIn("example.invalid/image:tag", json.loads(capture.read_text()))
 
     def test_start_step_rejects_a_malformed_env_payload(self) -> None:
         """A payload that is not a JSON array fails here, not as a timeout.
@@ -489,12 +509,14 @@ class ScanCoverageContractTest(unittest.TestCase):
         by_name = {step.get("name"): step for step in workflow["jobs"]["scan"]["steps"]}
 
         self.assertIn('A-Za-z_][A-Za-z0-9_]*', by_name["Start mcp server"]["run"])
-        # No step in this workflow may take the runner's secrets.
+        # No step may take the whole secret context into its environment. A
+        # step scoped `env: ${{ secrets }}` exposes every repository secret to
+        # that shell; the registry token in `with:` is a separate, single use.
         for step in workflow["jobs"]["scan"]["steps"]:
             self.assertNotIn(
-                "secrets",
+                "${{ secrets }}",
                 json.dumps(step.get("env", {})),
-                f"{step.get('name')} still scopes the runner secrets",
+                f"{step.get('name')} scopes the whole secret context",
             )
 
     def test_readiness_wait_rejects_an_inconclusive_status(self) -> None:

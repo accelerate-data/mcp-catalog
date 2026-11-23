@@ -193,19 +193,25 @@ jobs:
           # wait would report a timeout instead of the real cause.
           #
           # `toJson` of an absent property is the literal string "null", which
-          # is what an entry declaring no args produces, so null is valid. The
-          # element types are checked too: a well-formed array of the wrong
-          # shape would otherwise pass and then fail inside the unpacking loop,
-          # where the status is discarded.
-          if ! jq -e 'type == "null" or (type == "array" and all(.[]; type == "string"))' \
+          # is what an entry declaring no args produces, so null is valid.
+          # Args may also be scalars: YAML reads an unquoted `8080` as a number,
+          # which terraform declares, and jq stringifies it for the argv. Only a
+          # nested structure is rejected — that is the shape that would fail
+          # later in the unpacking loop, where the status is discarded.
+          if ! jq -e 'type == "null" or (type == "array" and all(.[];
+                type != "array" and type != "object"))' \
             <<< "${ARGS_JSON:-[]}" >/dev/null 2>&1; then
-            echo "ARGS_JSON must be null or an array of strings: $ARGS_JSON" >&2
+            echo "ARGS_JSON must be null or an array of scalars: $ARGS_JSON" >&2
             exit 1
           fi
+          # Each forwarded input carries a static value; a `value` that is not a
+          # scalar would reach docker as a literal repr, so it is required here.
           if ! jq -e 'type == "null" or (type == "array" and all(.[];
-                type == "object" and (.key | type == "string")))' \
+                type == "object"
+                and (.key | type == "string")
+                and (.value | type != "array" and type != "object")))' \
             <<< "${ENV_JSON:-[]}" >/dev/null 2>&1; then
-            echo "ENV_JSON must be null or an array of key/value objects: $ENV_JSON" >&2
+            echo "ENV_JSON must be null or an array of key/value entries: $ENV_JSON" >&2
             exit 1
           fi
 
