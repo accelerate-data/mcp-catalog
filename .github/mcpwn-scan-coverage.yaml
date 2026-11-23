@@ -1,4 +1,4 @@
-# Which curated catalog entries the automated mcpwn scan can cover.
+# Which catalog entries the automated mcpwn scan can cover.
 #
 # Accelerate Data addition. Two consumers read this file:
 #
@@ -10,8 +10,9 @@
 #       into the Curated Entry Contract job summary so a reviewer sees the
 #       coverage without opening a workflow file.
 #
-# Every curated (first-party) entry is listed. Catalog inventory inherited from
-# upstream is absent and keeps upstream's automated-scan behaviour unchanged.
+# Every curated (first-party) entry must be listed. An inherited catalog entry
+# may be listed too, but only one declaring a containerizedConfig image — the
+# only shape the scan matrix can select.
 #
 #   scan: automated   the scan is expected to produce a result, `reason`
 #                     explains why, and that result gates the pull request.
@@ -22,6 +23,13 @@
 # Marking an entry `manual` removes automated coverage. It is not a way to get
 # an entry merged faster — the alternative review is the merge gate instead,
 # and the contract check fails if it is missing.
+#
+# The `manual` reasons below for containerized entries record why the scan
+# cannot start them on an unprivileged pull request token: the scan supplies
+# an entry's static config values and nothing else, because the workflow runs
+# without repository secrets. Each names the input the image needs or the
+# failure it exits with, verified against the weekly fan-out on 2026-11-16
+# (amd64 GitHub-hosted runners).
 
 version: 1
 
@@ -84,3 +92,341 @@ entries:
       profiles, and it rejects credentials in the URL, static header values,
       staticOAuthRequired, and per-user header prompts. This declaration does
       not claim provider certification.
+
+  # Containerized catalog entries inherited from upstream. Each one below was
+  # started on the 2026-11-16 fan-out and cannot answer the scan from the
+  # inputs an unprivileged pull request can supply.
+
+  - file: obot-images/terraform.yaml
+    scan: automated
+    reason: >-
+      Starts without a credential and serves its MCP endpoint on the declared
+      /mcp path. It needs several seconds to bind, which the workflow now waits
+      for, and the scan must probe /mcp rather than the root; with both in
+      place the image answers initialize and the scan completes.
+
+  - file: obot-images/github_enterprise.yaml
+    scan: automated
+    reason: >-
+      Starts and answers initialize on its declared root path without a
+      credential, and was the only entry the 2026-11-16 fan-out scanned
+      successfully before these fixes. It reads
+      GITHUB_PERSONAL_ACCESS_TOKEN directly but only requires it for tool
+      calls, not to start.
+
+  - file: obot-images/brave_search.yaml
+    scan: manual
+    reason: >-
+      The image needs its Brave API key before it starts the server, and the
+      scan supplies only an entry's static values, which contain no credential.
+      The key reaches the server in two layers: Obot passes it to the container
+      as an environment variable and lists it in MMMCP_META_ENV, and the
+      image's wrapper then forwards it to the child process. The scan sets
+      neither, so the child starts with no key and exits with `Error:
+      --brave-api-key is required`. The entry is correct for Obot.
+    alternative: >-
+      The entry is exercised end to end by the Obot runtime rather than this
+      scan. Verified with a real key: launched as Obot launches it
+      (`-e BRAVE_API_KEY=... -e MMMCP_META_ENV=BRAVE_API_KEY`, declared args)
+      the image runs and answers initialize with HTTP 200; the same env without
+      MMMCP_META_ENV exits 1 with `--brave-api-key is required`. See the note
+      on this entry's contract in the catalog repository's AGENTS.md. The entry
+      is also marked deprecated in metadata, so it is not offered for new
+      installs.
+
+  - file: obot-images/grafana.yaml
+    scan: manual
+    reason: >-
+      The image binds its declared /mcp path but answers 403 `forbidden: host
+      not allowed` without a Grafana instance URL and a service-account token.
+      The entry declares no static value for GRAFANA_URL, and the scan
+      forwards only static values, so the scan cannot supply it; the token that
+      authorizes the MCP path is operator-supplied in any case.
+    alternative: >-
+      The entry pins GRAFANA_URL as required and
+      GRAFANA_SERVICE_ACCOUNT_TOKEN as a sensitive input, so Studio cannot
+      treat the server as configured without a deployment-scoped credential.
+      The image was verified to start and bind its declared /mcp path; only
+      authorization is missing under the scan.
+
+  - file: obot-images/oracle.yaml
+    scan: manual
+    reason: >-
+      The image is the Google Database Toolbox with the `oracledb` prebuilt
+      configuration, which validates that every variable that configuration
+      declares is present before it starts and exits with `unable to parse
+      prebuilt tool configuration for 'oracledb': error parsing environment
+      variables: environment variables not found`. Supplying placeholder
+      values is not enough: the prebuilt configuration opens the database
+      connection at startup and fails with `unable to connect to Oracle
+      successfully` when the host does not resolve. The connection string and
+      username/password are operator-supplied and address a real database.
+    alternative: >-
+      The entry declares its connection inputs as required and marks the
+      password sensitive, so a deployment cannot start this server without a
+      reachable Oracle database. There is no path to automated coverage here
+      short of a live Oracle instance, so the merge gate is the contract
+      review of those inputs.
+
+  - file: obot-images/sqlserver.yaml
+    scan: manual
+    reason: >-
+      Same image and same prebuilt-configuration startup as
+      obot-images/oracle.yaml: the `mssql` configuration refuses to start until
+      its database variables are present, and then opens the database
+      connection at startup. The database address and credentials are
+      operator-supplied and address a real server.
+    alternative: >-
+      The entry declares its database inputs as required and marks the
+      password sensitive. There is no path to automated coverage here short of
+      a live SQL Server instance, so the merge gate is the contract review of
+      those inputs.
+
+  - file: obot-images/tableau.yaml
+    scan: manual
+    reason: >-
+      The image exits with `OAUTH_ISSUER must be set when TRANSPORT is
+      http` and, once that is satisfied, `The environment variable SERVER is
+      not set`. Supplying placeholder values is not enough: it then fetches
+      server info from the Tableau site and exits with `Fatal error
+      initializing server info`. The site and personal access token are
+      operator-supplied and address a real Tableau deployment.
+    alternative: >-
+      The entry declares SERVER, PAT_NAME and PAT_VALUE as required and marks
+      the token sensitive, so a deployment cannot start this server without a
+      reachable Tableau site. There is no path to automated coverage here
+      short of a live site, so the merge gate is the contract review of those
+      inputs.
+
+  - file: obot-images/wordpress.yaml
+    scan: manual
+    reason: >-
+      The image exits with `Error starting WordPress MCP Server: Required
+      environment variable WORDPRESS_SITE is not set`. The site, username and
+      password are operator-supplied.
+    alternative: >-
+      The entry declares its site and credentials as required and marks the
+      password sensitive, so a deployment cannot start this server without
+      them. The image's own log names WORDPRESS_SITE as the missing variable;
+      the site, username and password all remain operator-supplied.
+
+  - file: obot-images/gitlab.yaml
+    scan: manual
+    reason: >-
+      The image exits 1 with `GITLAB_PERSONAL_ACCESS_TOKEN environment variable
+      is not set` and `Either set GITLAB_PERSONAL_ACCESS_TOKEN or enable OAuth
+      with GITLAB_USE_OAUTH=true`. The token is operator-supplied.
+    alternative: >-
+      The entry declares GITLAB_PERSONAL_ACCESS_TOKEN as a required, sensitive
+      input. The merge gate is the contract review of that input; the scan
+      cannot supply it without a repository secret.
+
+  - file: obot-images/azure.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving: `Failed to determine default extraction
+      location. Environment variable '$HOME' is not defined and getpwuid()
+      returned NULL`, raised while unpacking the .NET bundle. The image has no
+      passwd entry for its runtime user, so this is a property of the image
+      rather than a missing credential, and no input the scan supplies changes
+      it.
+    alternative: >-
+      Not covered. This entry needs the image fixed or a launcher that sets
+      HOME and a resolvable passwd entry before an automated scan can say
+      anything about its tools.
+
+  - file: obot-images/playwright.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving with
+      `SystemError [ERR_SYSTEM_ERROR]: uv_os_homedir returned ENOENT`, the same
+      passwd-entry defect as obot-images/azure.yaml. The entry declares no
+      configuration inputs at all, so this is not a credential gap.
+    alternative: >-
+      Not covered. This entry needs the image fixed or a launcher that sets
+      HOME and a resolvable passwd entry before an automated scan can say
+      anything about its tools.
+
+  - file: obot-images/markitdown.yaml
+    scan: manual
+    reason: >-
+      The server starts and answers initialize, then the scanner aborts at
+      `Found %d tools, %d resources` with `TypeError: object of type
+      'NoneType' has no len()`. The image answers resources/list with a JSON-RPC
+      error rather than a result, so mcpwn's discovery sets resources to None
+      and its own length check raises. The failure is in the scanner, not the
+      entry.
+    alternative: >-
+      Not covered. Requires an mcpwn fix to tolerate a null resources result.
+      The entry itself declares no configuration inputs and its image was
+      verified to answer initialize and tools/list.
+
+  - file: obot-images/duckduckgo_search.yaml
+    scan: manual
+    reason: >-
+      Same scanner abort as obot-images/markitdown.yaml: the server answers
+      initialize, then mcpwn crashes with `TypeError: object of type
+      'NoneType' has no len()` on a null resources result.
+    alternative: >-
+      Not covered. Requires an mcpwn fix to tolerate a null resources result.
+      The entry declares no configuration inputs and its image was verified to
+      answer initialize.
+
+  - file: obot-images/antv_charts.yaml
+    scan: manual
+    reason: >-
+      Same scanner abort as obot-images/markitdown.yaml: the server answers
+      initialize, then mcpwn crashes with `TypeError: object of type
+      'NoneType' has no len()` on a null resources result.
+    alternative: >-
+      Not covered. Requires an mcpwn fix to tolerate a null resources result.
+      The entry declares only optional inputs and its image was verified to
+      answer initialize.
+
+  - file: obot-images/browserbase.yaml
+    scan: manual
+    reason: >-
+      The image starts and answers initialize without credentials, but mcpwn
+      then aborts with `TypeError: object of type 'NoneType' has no len()` on
+      a null resources result, the same scanner defect as
+      obot-images/markitdown.yaml.
+    alternative: >-
+      Not covered. Requires an mcpwn fix to tolerate a null resources result.
+      The entry declares three required inputs of its own, so it would need
+      placeholder values to be exercised meaningfully even after that fix.
+
+  - file: obot-images/postgresql.yaml
+    scan: manual
+    reason: >-
+      The image exits with `Error: No database URL provided. Please specify via
+      'DATABASE_URI' environment variable or command-line argument`. The
+      connection string is operator-supplied.
+    alternative: >-
+      The entry declares DATABASE_URI as a required input, so a deployment
+      cannot start this server without it. The image was verified to reach its
+      own connection check; only the database URL is missing under the scan.
+
+  - file: obot-images/mysql.yaml
+    scan: manual
+    reason: >-
+      The image reaches its own startup and then raises `AttributeError:
+      'Server' object has no attribute 'list_resources'`. It also needs the
+      operator-supplied MYSQL_* connection inputs.
+    alternative: >-
+      The entry declares its host, user, password and database as required and
+      marks the password sensitive. The image's startup defect is independent
+      of the scan and is not something an entry change can fix.
+
+  - file: obot-images/redis.yaml
+    scan: manual
+    reason: >-
+      The image exits with `Error parsing Redis URI: Unsupported scheme: `,
+      because its args interpolate ${REDIS_URI} and no connection string is
+      supplied. The URI is operator-supplied.
+    alternative: >-
+      The entry declares REDIS_URI as a required input, so a deployment cannot
+      start this server without it. Only that value is missing under the scan.
+
+  - file: obot-images/mongodb_database.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving with `SystemError [ERR_SYSTEM_ERROR]: A
+      system error occurred: uv_os_homedir returned ENOENT (no such file or
+      directory)` while resolving `os.homedir()` for its state file. Its own
+      runtime user has no passwd entry. The entry also declares an
+      operator-supplied connection string.
+    alternative: >-
+      Not covered. The image needs a resolvable passwd entry or a launcher
+      that sets HOME before an automated scan can say anything about its
+      tools.
+
+  - file: obot-images/mongodb_atlas_management.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving with `SystemError [ERR_SYSTEM_ERROR]: A
+      system error occurred: uv_os_homedir returned ENOENT (no such file or
+      directory)` while resolving `os.homedir()`, the same passwd-entry defect
+      as obot-images/mongodb_database.yaml. The entry also declares
+      operator-supplied API client credentials.
+    alternative: >-
+      Not covered. The image needs a resolvable passwd entry or a launcher
+      that sets HOME before an automated scan can say anything about its
+      tools.
+
+  - file: obot-images/aws.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving with `RuntimeError: Could not determine
+      home directory`, the same passwd-entry defect as
+      obot-images/azure.yaml. The entry also declares operator-supplied AWS
+      credentials.
+    alternative: >-
+      Not covered. The image needs a resolvable passwd entry or a launcher
+      that sets HOME before an automated scan can say anything about its
+      tools.
+
+  - file: obot-images/aws_documentation.yaml
+    scan: manual
+    reason: >-
+      The image exits with `ModuleNotFoundError: No module named
+      'mcp.server.fastmcp'`, so the packaged server cannot start at all. The
+      same failure is present on obot-images/aws_eks.yaml,
+      obot-images/aws_kendra.yaml and obot-images/aws_redshift.yaml, which
+      ship the same image family.
+    alternative: >-
+      Not covered. This is a packaging defect in the image, independent of the
+      scan and of the entry's configuration inputs.
+
+  - file: obot-images/aws_eks.yaml
+    scan: manual
+    reason: >-
+      The image exits with `ModuleNotFoundError: No module named
+      'mcp.server.fastmcp'`, the same packaging defect as
+      obot-images/aws_documentation.yaml.
+    alternative: >-
+      Not covered. This is a packaging defect in the image, independent of the
+      scan and of the entry's configuration inputs.
+
+  - file: obot-images/aws_kendra.yaml
+    scan: manual
+    reason: >-
+      The image exits with `ModuleNotFoundError: No module named
+      'mcp.server.fastmcp'`, the same packaging defect as
+      obot-images/aws_documentation.yaml.
+    alternative: >-
+      Not covered. This is a packaging defect in the image, independent of the
+      scan and of the entry's configuration inputs.
+
+  - file: obot-images/aws_redshift.yaml
+    scan: manual
+    reason: >-
+      The image exits with `ModuleNotFoundError: No module named
+      'mcp.server.fastmcp'`, the same packaging defect as
+      obot-images/aws_documentation.yaml.
+    alternative: >-
+      Not covered. This is a packaging defect in the image, independent of the
+      scan and of the entry's configuration inputs.
+
+  - file: obot-images/chroma.yaml
+    scan: manual
+    reason: >-
+      The image exits before serving with `Could not determine home
+      directory`, the same passwd-entry defect as obot-images/azure.yaml. The
+      entry also declares a required, sensitive Chroma API key.
+    alternative: >-
+      Not covered. The image needs a resolvable passwd entry or a launcher
+      that sets HOME before an automated scan can say anything about its
+      tools.
+
+  - file: obot-images/slack.yaml
+    scan: manual
+    reason: >-
+      The server starts and binds its declared /mcp path, then fails the first
+      MCP request with `Failed to initialize server: Error: SLACK_BOT_TOKEN is
+      not set` and exits. The token is operator-supplied, and the image reads
+      it directly rather than through an mmmcp wrapper.
+    alternative: >-
+      The entry declares SLACK_BOT_TOKEN as a required, sensitive input, so a
+      deployment cannot start this server without it. With the token present
+      the image answers initialize on its declared /mcp path with 200; only
+      the token is missing under the scan.

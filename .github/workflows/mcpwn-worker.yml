@@ -21,9 +21,14 @@ on:
         required: true
         type: string
       env_b64:
-        description: "Base64 JSON object of env"
+        description: "Base64 JSON array of env entries (key/value objects)"
         required: true
         type: string
+      path:
+        description: "MCP endpoint path the entry declares"
+        required: false
+        type: string
+        default: "/"
       workflow_name:
         description: "Custom workflow name"
         required: false
@@ -78,57 +83,149 @@ jobs:
         env:
           ARGS_B64: ${{ inputs.args_b64 }}
           ENV_B64: ${{ inputs.env_b64 }}
+          IMAGE: ${{ inputs.image }}
+          MCP_PATH: ${{ inputs.path }}
+          TARGET_PORT: ${{ inputs.port }}
         run: |
           set -euo pipefail
 
-          ARGS_JSON=$(echo "$ARGS_B64" | base64 -d)
-          ENV_JSON=$(echo "$ENV_B64"  | base64 -d)
+          ARGS_JSON=$(echo "$ARGS_B64" | base64 -d | jq -c .)
+          ENV_JSON=$(echo "$ENV_B64"  | base64 -d | jq -c .)
 
-          # Build env flags from object -> -e KEY=VALUE
-          if [ "$ENV_JSON" != "null" ] && [ -n "$ENV_JSON" ]; then
-            DOCKER_ENV_ARGS=$(echo "$ENV_JSON" | jq -r 'map("-e " + .key) | join(" ")')
-            echo "DOCKER_ENV_ARGS=$DOCKER_ENV_ARGS" >> $GITHUB_ENV
-          else
-            echo "DOCKER_ENV_ARGS=" >> $GITHUB_ENV
+          if [[ ! "$TARGET_PORT" =~ ^[0-9]+$ ]] || (( TARGET_PORT < 1 || TARGET_PORT > 65535 )); then
+            echo "Invalid container port: $TARGET_PORT" >&2
+            exit 1
           fi
-
-          # Build args string from array -> "a b c"
-          if [ "$ARGS_JSON" != "null" ] && [ -n "$ARGS_JSON" ]; then
-            ARGS_STRING=$(echo "$ARGS_JSON" | jq -r 'join(" ")')
-            echo "ARGS_STRING=$ARGS_STRING" >> $GITHUB_ENV
-          else
-            echo "ARGS_STRING=" >> $GITHUB_ENV
+          if [[ -z "$IMAGE" ]]; then
+            echo "Container image must not be empty" >&2
+            exit 1
           fi
-
-      - name: Start mcp server
-        env: ${{ secrets }}
-        run: |
-          docker run -d --name ${MCP_SERVER_NAME} \
-            -p 8080:${{ inputs.port }} \
-            ${DOCKER_ENV_ARGS} \
-            ${{ inputs.image }} ${ARGS_STRING}
-
-      - name: Verify container is running
-        run: |
-          set -euo pipefail
-
-          # Give container a moment to start
-          sleep 2
-
-          # Check if container is still running
-          if ! docker ps --filter "name=${MCP_SERVER_NAME}" --format "{{.Names}}" | grep -q "${MCP_SERVER_NAME}"; then
-            echo "ERROR: Container ${MCP_SERVER_NAME} exited unexpectedly"
-            echo "Container logs:"
-            docker logs ${MCP_SERVER_NAME} || true
+          # The image reference reaches later steps through $GITHUB_ENV, where a
+          # newline starts a second variable assignment. It arrives from a
+          # dispatch built out of catalog YAML, so require the shape of a real
+          # image reference rather than only a non-empty value.
+          if [[ ! "$IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]]; then
+            echo "Invalid container image reference: $IMAGE" >&2
+            exit 1
+          fi
+          # Every value below reaches later steps through $GITHUB_ENV, where a
+          # newline starts a second variable assignment. These arrive from a
+          # dispatch built out of catalog YAML, so a plain path is required
+          # rather than trusting the shape.
+          if [[ -z "$MCP_PATH" ]]; then
+            MCP_PATH="/"
+          fi
+          if [[ ! "$MCP_PATH" =~ ^/[A-Za-z0-9._~/-]*$ ]]; then
+            echo "Invalid MCP endpoint path: $MCP_PATH" >&2
             exit 1
           fi
 
-          echo "Container ${MCP_SERVER_NAME} is running"
+          # The payloads must be the shape the unpacking loop expects. That
+          # loop reads them through a process substitution, where a jq failure
+          # is discarded, so a wrong shape would start the container with no
+          # inputs instead of failing. Validate both here for the same reason
+          # the pull-request lane does.
+          if ! jq -e 'type == "null" or (type == "array" and all(.[];
+                type != "array" and type != "object"))' \
+            <<< "${ARGS_JSON:-[]}" >/dev/null 2>&1; then
+            echo "ARGS_JSON must be null or an array of scalars: $ARGS_JSON" >&2
+            exit 1
+          fi
+          if ! jq -e 'type == "null" or (type == "array" and all(.[];
+                type == "object"
+                and (.key | type == "string")
+                and (.value | type != "array" and type != "object")))' \
+            <<< "${ENV_JSON:-[]}" >/dev/null 2>&1; then
+            echo "ENV_JSON must be null or an array of key/value entries: $ENV_JSON" >&2
+            exit 1
+          fi
+
+          # Accelerate Data addition: dispatch inputs are carried in the
+          # environment rather than interpolated into shell source, so a value
+          # can never terminate a quote and become a command. MCP_PATH reaches
+          # the later steps through GITHUB_ENV because the scan step needs it
+          # too, not only the readiness wait.
+          {
+            printf 'ENV_JSON=%s\n' "$ENV_JSON"
+            printf 'ARGS_JSON=%s\n' "$ARGS_JSON"
+            printf 'IMAGE=%s\n' "$IMAGE"
+            printf 'TARGET_PORT=%s\n' "$TARGET_PORT"
+            printf 'MCP_PATH=%s\n' "$MCP_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Start mcp server
+        run: |
+          set -euo pipefail
+
+          docker_args=(run -d --name "${MCP_SERVER_NAME}" -p "8080:${TARGET_PORT}")
+          # The fan-out sends every env-typed entry, so an operator-supplied
+          # input arrives without a static value. Only the ones carrying a
+          # value are forwarded, as KEY=VALUE: a bare KEY would read the
+          # runner's environment, which never holds the entry's value, and
+          # would start the image with an empty variable.
+          while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+            if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+              echo "Invalid environment variable name: $key" >&2
+              exit 1
+            fi
+            docker_args+=(-e "$key=$value")
+          done < <(jq --raw-output0 '.[]? | select(.value != null) | .key, .value' <<< "${ENV_JSON:-[]}")
+
+          server_args=()
+          while IFS= read -r -d '' arg; do
+            server_args+=("$arg")
+          done < <(jq --raw-output0 '.[]?' <<< "${ARGS_JSON:-[]}")
+
+          docker "${docker_args[@]}" "$IMAGE" ${server_args[@]+"${server_args[@]}"}
+
+      - name: Wait for the mcp server to accept connections
+        env:
+          PORT: "8080"
+        run: |
+          set -euo pipefail
+
+          # Accelerate Data addition: `docker run -d` returns as soon as the
+          # container is created and a fixed `sleep 2` does not cover an image
+          # that needs longer to bind, so the scanner used to connect too
+          # early and die with ConnectionRefusedError. Wait for the endpoint,
+          # bounded, and report the container's own logs when it exits.
+          #
+          # Readiness is an HTTP response, not a TCP connect: Docker's userland
+          # proxy completes the handshake even when nothing inside the
+          # container is listening, so a connect test succeeds against a
+          # container that has not started serving.
+          # Overridable so a test can exercise the timeout without waiting.
+          READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}
+          started=$SECONDS
+          deadline=$(( started + READY_TIMEOUT_SECONDS ))
+          while (( SECONDS < deadline )); do
+            state=$(docker inspect --format '{{.State.Status}}' "${MCP_SERVER_NAME}" 2>/dev/null || echo missing)
+            if [[ "$state" == "exited" || "$state" == "dead" || "$state" == "missing" ]]; then
+              echo "::error::Container ${MCP_SERVER_NAME} exited before accepting connections on port $PORT (state: $state)."
+              docker logs "${MCP_SERVER_NAME}" 2>&1 || true
+              exit 1
+            fi
+            # curl prints 000 itself when it cannot connect. Require a real
+            # status: an empty value means curl was missing or produced no
+            # output, which must not be read as ready.
+            status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
+              "http://127.0.0.1:${PORT}${MCP_PATH:-/}" 2>/dev/null || true)
+            if [[ "$status" =~ ^[1-5][0-9]{2}$ ]]; then
+              echo "Container answered HTTP $status after $(( SECONDS - started ))s."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Container ${MCP_SERVER_NAME} did not answer HTTP on port $PORT within ${READY_TIMEOUT_SECONDS}s."
+          docker logs "${MCP_SERVER_NAME}" 2>&1 || true
+          exit 1
 
       - name: Run mcpwn scan
         run: |
           set -euo pipefail
-          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode http://localhost:8080
+          MCP_PATH="${MCP_PATH:-/}"
+          python3 mcpwn.py --output-sarif mcpwn-results.sarif --safe-mode "http://localhost:8080${MCP_PATH}"
 
       - name: Upload SARIF artifact
         if: always()

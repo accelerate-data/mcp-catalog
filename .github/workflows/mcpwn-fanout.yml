@@ -154,6 +154,7 @@ jobs:
                     file: t.file,
                     image: String(t.containerizedConfig.image),
                     port: String(t.containerizedConfig.port),
+                    path: String(t.containerizedConfig.path || '/'),
                     args_b64: argsB64,
                     env_b64: envB64,
                     workflow_name: process.env.WORKFLOW_NAME || 'Mcpwn Scan'

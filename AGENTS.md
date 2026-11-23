@@ -19,6 +19,26 @@ Catalog entries must:
 - Preserve configuration keys, sensitivity, required flags, prefixes, and allowed options. Catalog definitions do not declare `userAllowed`; vMCP component policies determine who supplies values and whether runtimes are shared.
 - Keep static non-secret source values in `value`; do not write response-only `static` markers or plaintext secrets.
 
+# Containerized entry contract
+
+A containerized entry's `containerizedConfig.args` and `config` describe what Obot
+passes at runtime, not what the security scan can reproduce.
+
+- Obot starts the image with the entry's `args` and, for each declared input the
+  deployment has filled in, an environment variable. It also sets
+  `MMMCP_META_ENV` to the comma-separated names of those variables
+  (`pkg/mcp/docker.go` in `accelerate-data/obot`).
+- Obot's `mcp-images` images run through an `mmmcp.sh` wrapper that forwards an
+  environment variable to its child process only when the name appears in
+  `MMMCP_META_ENV`. An image whose server expects a CLI flag therefore works when
+  the deployment supplies the variable, even though the entry declares no flag.
+- The mcpwn scan cannot do the same: it runs on an unprivileged pull request
+  token with no repository secrets, so it supplies only an entry's static
+  `config` values. An entry that cannot start without an operator-supplied input
+  is declared `scan: manual` in `.github/mcpwn-scan-coverage.yaml` with the
+  failure it exits with. Do not "fix" such an entry by changing its `args` — the
+  declared contract is what Obot uses.
+
 # Catalog Validation
 
 New catalog entries must use an `entryKey` prefixed with `obot-`.

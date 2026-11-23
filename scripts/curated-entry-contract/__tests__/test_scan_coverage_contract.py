@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import os
@@ -17,6 +18,11 @@ SPEC = importlib.util.spec_from_file_location("scan_coverage_contract", MODULE_P
 assert SPEC is not None and SPEC.loader is not None
 scan_coverage = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(scan_coverage)
+
+
+def base64_std(value: object) -> str:
+    """Base64 of the JSON the fan-out encodes for a worker dispatch."""
+    return base64.b64encode(json.dumps(value).encode()).decode()
 
 
 class ScanCoverageContractTest(unittest.TestCase):
@@ -46,31 +52,134 @@ class ScanCoverageContractTest(unittest.TestCase):
 
                     self.assertIn(f"{path}: version must be 1", errors)
 
-    def test_rejects_declaration_for_non_curated_catalog_entry(self) -> None:
+    def test_rejects_declaration_for_an_entry_the_scan_cannot_select(self) -> None:
+        """Only a curated entry or a containerized one may be declared.
+
+        An inherited entry is declarable so the ones the scan cannot start can
+        carry a recorded reason; a remote entry is not, because the scan matrix
+        never selects it and a declaration there would claim a gap that does
+        not exist.
+        """
         errors: list[str] = []
         declarations = {
             "fabric-core.yaml": {"scan": "manual"},
-            "aws.yaml": {"scan": "manual"},
+            "remotes/zoom.yaml": {"scan": "manual"},
         }
 
         scan_coverage.check_coverage(Path.cwd(), declarations, errors.append)
 
-        self.assertIn(
-            ".github/mcpwn-scan-coverage.yaml: aws.yaml is not a curated entry; "
-            "only curated entries may declare scan coverage",
+        self.assertTrue(
+            any(
+                "remotes/zoom.yaml is not an entry the scan can select" in error
+                for error in errors
+            ),
             errors,
         )
 
-    def test_pr_scan_runs_without_target_privileges_or_secrets(self) -> None:
-        workflow = (Path.cwd() / ".github/workflows/mcpwn.yml").read_text()
+    def test_accepts_a_containerized_entry_the_scan_cannot_start(self) -> None:
+        """Every containerized entry the scan selects must be declared.
 
-        self.assertIn("  pull_request:\n", workflow)
-        self.assertNotIn("pull_request_target", workflow)
-        self.assertNotIn("env: ${{ secrets }}", workflow)
-        self.assertNotIn("pull-requests: write", workflow)
-        self.assertNotIn("id-token: write", workflow)
-        self.assertNotIn("changed_files='${{", workflow)
-        self.assertIn("CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}", workflow)
+        The declaration is required, not merely permitted: that is what keeps
+        coverage accurate when a new containerized entry arrives, instead of
+        letting it be added and scanned with no recorded decision.
+        """
+        errors: list[str] = []
+        declarations = {
+            name: {"scan": "manual", "reason": "r", "alternative": "a"}
+            for name in scan_coverage.CURATED_ENTRIES
+        }
+        declarations["obot-images/brave_search.yaml"] = {
+            "scan": "manual",
+            "reason": "r",
+            "alternative": "a",
+        }
+
+        # Incomplete: the other containerized entries the scan selects are
+        # undeclared, and each must be reported.
+        scan_coverage.check_coverage(Path.cwd(), declarations, errors.append)
+        self.assertTrue(
+            any(
+                "declares a containerizedConfig image" in error and "no coverage" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+        # Complete: declaring every containerized entry plus every curated one
+        # passes. The set is read from the tree independently of the function
+        # under test, so this cannot agree with a broken implementation.
+        root = Path.cwd()
+        containerized: set[str] = set()
+        for path in root.rglob("*.yaml"):
+            relative = path.relative_to(root)
+            if any(part.startswith(".") for part in relative.parts):
+                continue
+            manifest = yaml.safe_load(path.read_text())
+            if isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            ):
+                containerized.add(relative.as_posix())
+
+        complete = {
+            name: {"scan": "manual", "reason": "r", "alternative": "a"}
+            for name in containerized | set(scan_coverage.CURATED_ENTRIES)
+        }
+        errors = []
+        scan_coverage.check_coverage(root, complete, errors.append)
+        self.assertEqual(errors, [])
+        # The independent walk and the implementation must agree, so a change
+        # to either is visible here.
+        self.assertEqual(containerized, scan_coverage.containerized_catalog_files(root))
+
+    def test_containerized_universe_matches_the_fanout_selection(self) -> None:
+        """The entries that must be declared are the ones the fan-out scans.
+
+        The validator selects through the catalog's own ignore rules while the
+        fan-out uses `find . -name '*.yaml'`. They agree today because every
+        containerized entry lives under `obot-images/`; this fails if one is
+        added somewhere the validator skips, which would be scanned yet never
+        require a declaration.
+        """
+        root = Path.cwd()
+        fanout: set[str] = set()
+        for path in root.rglob("*.yaml"):
+            relative = path.relative_to(root)
+            manifest = yaml.safe_load(path.read_text())
+            if isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            ):
+                fanout.add(relative.as_posix())
+
+        self.assertEqual(
+            fanout - scan_coverage.containerized_catalog_files(root),
+            set(),
+            "these containerized entries are scanned by the fan-out but could "
+            "not be declared unscannable",
+        )
+
+    def test_pr_scan_runs_without_target_privileges_or_secrets(self) -> None:
+        workflow_text = (Path.cwd() / ".github/workflows/mcpwn.yml").read_text()
+        workflow = yaml.safe_load(workflow_text)
+
+        self.assertIn("  pull_request:\n", workflow_text)
+        self.assertNotIn("pull_request_target", workflow_text)
+        self.assertNotIn("env: ${{ secrets }}", workflow_text)
+        self.assertNotIn("pull-requests: write", workflow_text)
+        self.assertNotIn("id-token: write", workflow_text)
+        self.assertNotIn("changed_files='${{", workflow_text)
+        self.assertIn(
+            "CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}", workflow_text
+        )
+        # No step may take a secret into its environment, in any form. The bare
+        # `${{ secrets }}` match above is not enough: `toJson(secrets)` and
+        # `secrets.GITHUB_TOKEN` belong to the same context.
+        for job in workflow["jobs"].values():
+            for step in job.get("steps") or []:
+                self.assertNotIn(
+                    "secrets",
+                    json.dumps(step.get("env", {})),
+                    f"{step.get('name')} scopes a secret into its environment",
+                )
 
     def test_docker_arguments_remain_discrete(self) -> None:
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
@@ -90,8 +199,10 @@ class ScanCoverageContractTest(unittest.TestCase):
             env = os.environ | {
                 "ARGS_JSON": json.dumps(["--label=a b", "line one\nline two", "$(false)"]),
                 "CAPTURE": str(capture),
-                "ENV_JSON": json.dumps([{"key": "SAFE_KEY"}]),
+                "ENV_JSON": json.dumps([{"key": "SAFE_KEY", "value": "a value"}]),
+                "GITHUB_ENV": str(temp / "github_env"),
                 "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/mcp",
                 "PATH": f"{temp}:{os.environ['PATH']}",
                 "PORT": "8080",
             }
@@ -108,13 +219,588 @@ class ScanCoverageContractTest(unittest.TestCase):
                     "-p",
                     "8080:8080",
                     "-e",
-                    "SAFE_KEY",
+                    "SAFE_KEY=a value",
                     "example.invalid/image:tag",
                     "--label=a b",
                     "line one\nline two",
                     "$(false)",
                 ],
             )
+
+    def test_static_values_are_forwarded_and_the_declared_path_is_used(self) -> None:
+        """A static value reaches docker, and the scan probes the declared path.
+
+        The PR lane runs without repository secrets, so a static config value
+        is the only credential-shaped input it can supply. It has to arrive as
+        KEY=VALUE: a bare KEY reads the runner's environment instead.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+        scan = next(step["run"] for step in steps if step.get("name") == "Run mcpwn scan")
+
+        # The scan probes the declared path, not the root.
+        self.assertIn('"http://localhost:8080${MCP_PATH}"', scan)
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            capture = temp / "argv.json"
+            github_env = temp / "github_env"
+            docker = temp / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, pathlib, sys\n"
+                "pathlib.Path(os.environ['CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n"
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "CAPTURE": str(capture),
+                "ENV_JSON": json.dumps(
+                    [{"key": "DANGEROUSLY_DISABLE_OAUTH", "value": "true"}]
+                ),
+                "GITHUB_ENV": str(github_env),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/tableau-mcp",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8098",
+            }
+
+            subprocess.run(["bash", "-euo", "pipefail", "-c", start], check=True, env=env)
+
+            argv = json.loads(capture.read_text())
+            self.assertIn("DANGEROUSLY_DISABLE_OAUTH=true", argv)
+            self.assertIn("8080:8098", argv)
+            self.assertIn("MCP_PATH=/tableau-mcp", github_env.read_text())
+
+    def test_an_entry_without_static_values_forwards_no_environment(self) -> None:
+        """A value-less input is skipped, not forwarded as KEY=null.
+
+        An entry can declare a key without a static value; the matrix filters
+        those out, and the loop repeats the filter so the container never gets
+        `-e KEY=null`. A valued sibling in the same payload still forwards.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            capture = temp / "argv.json"
+            docker = temp / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, pathlib, sys\n"
+                "pathlib.Path(os.environ['CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n"
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "CAPTURE": str(capture),
+                "ENV_JSON": json.dumps([{"key": "NO_VALUE"}, {"key": "HAS", "value": "v"}]),
+                "GITHUB_ENV": str(temp / "github_env"),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+            }
+
+            subprocess.run(["bash", "-euo", "pipefail", "-c", start], check=True, env=env)
+
+            argv = json.loads(capture.read_text())
+            self.assertIn("HAS=v", argv)
+            self.assertNotIn("NO_VALUE=null", argv)
+            self.assertFalse(
+                any("NO_VALUE" in arg for arg in argv), f"value-less key forwarded: {argv}"
+            )
+
+    def test_a_missing_declared_path_falls_back_to_the_root(self) -> None:
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            github_env = temp / "github_env"
+            docker = temp / "docker"
+            docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "ENV_JSON": json.dumps([]),
+                "GITHUB_ENV": str(github_env),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+            }
+
+            subprocess.run(["bash", "-euo", "pipefail", "-c", start], check=True, env=env)
+
+            self.assertIn("MCP_PATH=/", github_env.read_text())
+
+    def test_readiness_wait_is_bounded_and_reports_container_logs(self) -> None:
+        """A bounded wait replaces the race the scanner used to lose.
+
+        `docker run -d` returns as soon as the container is created, so the
+        scan connected about a second later and failed with
+        ConnectionRefusedError on an image that needs longer to bind.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        self.assertIn("READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}", wait)
+        # A container that exits is reported with its own logs, not left to the
+        # scanner to describe as a refused connection.
+        self.assertIn("docker logs mcpwn-target", wait)
+        self.assertIn("exited", wait)
+        # Readiness must be an HTTP response. Docker's userland proxy accepts a
+        # TCP connection to the published port even when nothing inside the
+        # container is listening, so a connect test passes against a container
+        # that has not started serving.
+        self.assertIn("curl", wait)
+        self.assertNotIn("/dev/tcp/", wait)
+        # The wait must be ordered before the scan.
+        names = [step.get("name") for step in steps]
+        self.assertLess(
+            names.index("Wait for the mcp server to accept connections"),
+            names.index("Run mcpwn scan"),
+        )
+
+    def test_start_step_rejects_a_path_that_would_escape_github_env(self) -> None:
+        """A declared path cannot inject a variable into later steps.
+
+        The path comes from catalog YAML in the pull request, and the start
+        step writes it to $GITHUB_ENV. A newline there starts a second
+        assignment, so an entry could set an arbitrary variable in the steps
+        that follow.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            docker = temp / "docker"
+            docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            github_env = temp / "github_env"
+            github_env.write_text("")
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "ENV_JSON": json.dumps([]),
+                "GITHUB_ENV": str(github_env),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/ok\nINJECTED=1",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", start],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("Invalid MCP endpoint path", result.stderr)
+            self.assertNotIn("INJECTED", github_env.read_text())
+
+    def test_start_step_accepts_every_args_payload_in_the_catalog(self) -> None:
+        """The guard must accept the payload every entry actually produces.
+
+        `toJson` of an absent property is the string "null"; an unquoted YAML
+        number arrives as a JSON number. Both occur in this catalog, and
+        rejecting either stops a real entry from starting — terraform declares
+        `8080` as a number and is one of the two entries the scan covers.
+        """
+        root = Path.cwd()
+        payloads: dict[str, str] = {}
+        for path in sorted(root.rglob("*.yaml")):
+            if any(part.startswith(".") for part in path.relative_to(root).parts):
+                continue
+            manifest = yaml.safe_load(path.read_text())
+            if not (isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            )):
+                continue
+            args = manifest["containerizedConfig"].get("args")
+            # The matrix emits `toJson` of the declared property, so an entry
+            # that declares no `args` produces the string "null" — not "[]".
+            payloads[path.name] = json.dumps(args) if args is not None else "null"
+
+        workflow = yaml.safe_load((root / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        for label, payload in payloads.items():
+            with self.subTest(entry=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    capture = temp / "argv.json"
+                    docker = temp / "docker"
+                    docker.write_text(
+                        "#!/usr/bin/env python3\n"
+                        "import json, os, pathlib, sys\n"
+                        "pathlib.Path(os.environ['CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n"
+                    )
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "ARGS_JSON": payload,
+                        "CAPTURE": str(capture),
+                        "ENV_JSON": json.dumps([]),
+                        "GITHUB_ENV": str(temp / "github_env"),
+                        "IMAGE": "example.invalid/image:tag",
+                        "MCP_PATH": "/",
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                    }
+
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", start],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertEqual(result.returncode, 0, f"{label}: {result.stderr}")
+                    # The image is followed by the forwarded args, so assert it
+                    # was invoked rather than that it came last.
+                    self.assertIn("example.invalid/image:tag", json.loads(capture.read_text()))
+
+    def test_start_step_rejects_a_malformed_env_payload(self) -> None:
+        """A payload that is not a JSON array fails here, not as a timeout.
+
+        A failing jq inside a process substitution is invisible even under
+        `set -o pipefail`, so the container would start with no inputs and the
+        readiness wait would report a timeout instead of the real cause. An
+        array of the wrong element shape has the same effect, so the elements
+        are checked too.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        for env_payload, why in (
+            ("not-json", "not JSON"),
+            (json.dumps([{"novalue": 1}]), "an element with no string key"),
+            (json.dumps([1, 2]), "an element that is not an object"),
+        ):
+            with self.subTest(payload=env_payload):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    docker = temp / "docker"
+                    docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "ARGS_JSON": json.dumps(["serve"]),
+                        "ENV_JSON": env_payload,
+                        "GITHUB_ENV": str(temp / "github_env"),
+                        "IMAGE": "example.invalid/image:tag",
+                        "MCP_PATH": "/",
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                    }
+
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", start],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0, f"{why} must be rejected")
+                    self.assertIn("ENV_JSON must be", result.stderr)
+
+    def test_worker_validates_env_names_and_keeps_no_secrets_scope(self) -> None:
+        """The worker rejects a malformed env name, as the PR lane does.
+
+        It also no longer needs the runner's secrets: nothing is started from
+        the runner environment now that bare `-e KEY` forwarding is gone.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        by_name = {step.get("name"): step for step in workflow["jobs"]["scan"]["steps"]}
+
+        self.assertIn('A-Za-z_][A-Za-z0-9_]*', by_name["Start mcp server"]["run"])
+        # No step may take the secret context into its environment. Any
+        # reference at all counts, not just the bare `${{ secrets }}` form:
+        # `toJson(secrets)` and `secrets.GITHUB_TOKEN` belong to the same
+        # context. The registry token in `with:` is a separate, single use and
+        # is not an `env:` scope.
+        for step in workflow["jobs"]["scan"]["steps"]:
+            self.assertNotIn(
+                "secrets",
+                json.dumps(step.get("env", {})),
+                f"{step.get('name')} scopes a secret into its environment",
+            )
+
+    def test_worker_rejects_the_same_bad_payloads_as_the_pr_lane(self) -> None:
+        """Both lanes unpack the payloads the same way, so both must validate.
+
+        The unpacking loop reads through a process substitution, where a jq
+        failure is discarded and the container starts with no inputs. The
+        worker is the higher-privilege lane, so its guard needs its own
+        coverage rather than riding on the pull-request one.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        steps = workflow["jobs"]["scan"]["steps"]
+        decode = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Decode args/env and build docker flags"
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            base = {
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "GITHUB_ENV": str(temp / "github_env"),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/",
+                "TARGET_PORT": "8080",
+            }
+            for args_b64, env_b64, expected in (
+                (base64_std([]), base64_std([]), 0),
+                (base64_std(None), base64_std(None), 0),
+                (base64_std([8080]), base64_std([]), 0),
+                (base64_std({"a": 1}), base64_std([]), 1),
+                (base64_std([]), base64_std([{"novalue": 1}]), 1),
+                (base64_std([]), base64_std([1]), 1),
+            ):
+                with self.subTest(args=args_b64, env=env_b64):
+                    Path(base["GITHUB_ENV"]).write_text("")
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", decode],
+                        env=os.environ | base | {"ARGS_B64": args_b64, "ENV_B64": env_b64},
+                        capture_output=True,
+                        text=True,
+                    )
+                    if expected == 0:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                    else:
+                        self.assertNotEqual(result.returncode, 0, result.stdout)
+
+    def test_readiness_wait_rejects_an_inconclusive_status(self) -> None:
+        """A status that is not a real HTTP code must not read as ready.
+
+        Docker's userland proxy completes the TCP handshake on a published
+        port even when nothing inside the container is listening, so readiness
+        has to come from an HTTP response. `000` is curl's "could not
+        connect", and an empty value means curl was missing or silent; neither
+        may be mistaken for a serving container.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        for reported in ("000", ""):
+            with self.subTest(reported=reported):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    log = temp / "container.log"
+                    log.write_text("still starting\n")
+                    docker = temp / "docker"
+                    docker.write_text(
+                        "#!/usr/bin/env python3\n"
+                        "import os, pathlib, sys\n"
+                        "if sys.argv[1] == 'inspect':\n"
+                        "    print('running')\n"
+                        "elif sys.argv[1] == 'logs':\n"
+                        "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
+                    )
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    curl = temp / "curl"
+                    curl.write_text(
+                        "#!/usr/bin/env python3\n"
+                        f"import sys; sys.stdout.write({reported!r})\n"
+                    )
+                    curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "LOGS": str(log),
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                        "READY_TIMEOUT_SECONDS": "2",
+                    }
+
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", wait],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertIn("did not answer HTTP", result.stderr + result.stdout)
+
+    def test_readiness_wait_accepts_any_real_http_status(self) -> None:
+        """A 404 still means the server is answering.
+
+        Readiness proves the server is reachable; the declared path is what the
+        scan reports on, so an entry serving elsewhere must surface as the
+        scan's own 404 rather than as a readiness timeout.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            docker = temp / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "if sys.argv[1] == 'inspect':\n"
+                "    print('running')\n"
+                "elif sys.argv[1] == 'logs':\n"
+                "    pass\n"
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            curl = temp / "curl"
+            curl.write_text("#!/usr/bin/env python3\nimport sys; sys.stdout.write('404')\n")
+            curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+                "READY_TIMEOUT_SECONDS": "2",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", wait], env=env, capture_output=True, text=True
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("answered HTTP 404", result.stdout)
+
+    def test_readiness_wait_fails_when_the_container_exits(self) -> None:
+        """The wait reports the container's logs and fails when it exited."""
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            calls = temp / "calls.txt"
+            log = temp / "container.log"
+            log.write_text("Error: --brave-api-key is required\n")
+            docker = temp / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, pathlib, sys\n"
+                "with open(os.environ['CALLS'], 'a') as handle:\n"
+                "    handle.write(' '.join(sys.argv[1:]) + '\\n')\n"
+                "if sys.argv[1] == 'inspect':\n"
+                "    print('exited')\n"
+                "elif sys.argv[1] == 'logs':\n"
+                "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            # The endpoint never answers, so the wait must run out and fail.
+            curl = temp / "curl"
+            curl.write_text("#!/usr/bin/env python3\nimport sys\nprint('000')\n")
+            curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "CALLS": str(calls),
+                "LOGS": str(log),
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+                "READY_TIMEOUT_SECONDS": "2",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", wait], env=env, capture_output=True, text=True
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("--brave-api-key is required", result.stdout + result.stderr)
+
+    def test_worker_probes_the_declared_path_and_waits_for_the_port(self) -> None:
+        """The weekly fan-out worker has the same two defects as the PR lane.
+
+        It used a fixed `sleep 2`, which does not cover an image that needs
+        longer to bind, and it always probed the root. Both are fixed here so
+        the scheduled run stops failing for reasons the PR lane no longer has.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        steps = workflow["jobs"]["scan"]["steps"]
+        by_name = {step.get("name"): step for step in steps}
+
+        self.assertIn("path", workflow[True]["workflow_dispatch"]["inputs"])
+        scan = by_name["Run mcpwn scan"]["run"]
+        self.assertIn('"http://localhost:8080${MCP_PATH}"', scan)
+
+        # MCP_PATH has to survive into the scan step, which is a later step
+        # than the wait. Scoping it to the wait made every worker probe the
+        # root again, which is the defect this change exists to fix.
+        decode = by_name["Decode args/env and build docker flags"]["run"]
+        self.assertIn("MCP_PATH=", decode)
+        self.assertNotIn("MCP_PATH", by_name["Wait for the mcp server to accept connections"].get("env", {}))
+
+        wait = by_name["Wait for the mcp server to accept connections"]["run"]
+        self.assertIn("READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-60}", wait)
+        self.assertIn("docker logs", wait)
+        self.assertIn("curl", wait)
+        self.assertNotIn("/dev/tcp/", wait)
+        self.assertNotIn("sleep 2\n", wait)
+
+        # A static value is forwarded as KEY=VALUE, not as a bare key.
+        start = by_name["Start mcp server"]["run"]
+        self.assertIn('-e "$key=$value"', start)
+        self.assertNotIn("ARGS_STRING", start)
+
+    def test_worker_does_not_interpolate_dispatch_inputs_into_shell(self) -> None:
+        """A dispatch input must reach the shell through the environment.
+
+        The worker runs with every repository secret in scope, so an input
+        spliced into the script could close a quote and run a command. Each
+        value is passed as an env entry and read as a variable instead.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        for step in workflow["jobs"]["scan"]["steps"]:
+            script = step.get("run", "")
+            for expression in ("${{ inputs.port }}", "${{ inputs.image }}", "${{ inputs.path }}"):
+                self.assertNotIn(
+                    expression,
+                    script,
+                    f"{step.get('name')} interpolates {expression} into shell source",
+                )
+
+    def test_fanout_passes_the_declared_path_to_the_worker(self) -> None:
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-fanout.yml").read_text()
+        )
+        dispatch = next(
+            step
+            for step in workflow["jobs"]["dispatch"]["steps"]
+            if step.get("name") == "Dispatch one worker run per target"
+        )
+
+        self.assertIn("path: String(t.containerizedConfig.path || '/')", dispatch["with"]["script"])
 
 
 if __name__ == "__main__":
