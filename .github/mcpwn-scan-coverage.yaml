@@ -248,52 +248,38 @@ entries:
       anything about its tools.
 
   - file: obot-images/markitdown.yaml
-    scan: manual
+    scan: automated
     reason: >-
-      The server starts and answers initialize, then the scanner aborts at
-      `Found %d tools, %d resources` with `TypeError: object of type
-      'NoneType' has no len()`. The image answers resources/list with a JSON-RPC
-      error rather than a result, so mcpwn's discovery sets resources to None
-      and its own length check raises. The failure is in the scanner, not the
-      entry.
-    alternative: >-
-      Not covered. Requires an mcpwn fix to tolerate a null resources result.
-      The entry itself declares no configuration inputs and its image was
-      verified to answer initialize and tools/list.
+      The image starts and answers initialize and tools/list. It answers
+      resources/list with `"resources": null`, which aborted discovery before
+      VD-8266; the scan now normalizes that to an empty list and completes
+      with `Found 1 tools, 0 resources`. The entry declares no configuration
+      inputs, so the scan starts it unmodified.
 
   - file: obot-images/duckduckgo_search.yaml
-    scan: manual
+    scan: automated
     reason: >-
-      Same scanner abort as obot-images/markitdown.yaml: the server answers
-      initialize, then mcpwn crashes with `TypeError: object of type
-      'NoneType' has no len()` on a null resources result.
-    alternative: >-
-      Not covered. Requires an mcpwn fix to tolerate a null resources result.
-      The entry declares no configuration inputs and its image was verified to
-      answer initialize.
+      The image starts and answers initialize and tools/list, then answers
+      resources/list with a null `resources` field. The VD-8266 scanner fix
+      normalizes it and discovery completes; the entry declares no
+      configuration inputs.
 
   - file: obot-images/antv_charts.yaml
-    scan: manual
+    scan: automated
     reason: >-
-      Same scanner abort as obot-images/markitdown.yaml: the server answers
-      initialize, then mcpwn crashes with `TypeError: object of type
-      'NoneType' has no len()` on a null resources result.
-    alternative: >-
-      Not covered. Requires an mcpwn fix to tolerate a null resources result.
-      The entry declares only optional inputs and its image was verified to
-      answer initialize.
+      The image starts and answers initialize and tools/list, then answers
+      resources/list with a null `resources` field. The VD-8266 scanner fix
+      normalizes it and discovery completes; the entry declares only optional
+      inputs.
 
   - file: obot-images/browserbase.yaml
-    scan: manual
+    scan: automated
     reason: >-
-      The image starts and answers initialize without credentials, but mcpwn
-      then aborts with `TypeError: object of type 'NoneType' has no len()` on
-      a null resources result, the same scanner defect as
-      obot-images/markitdown.yaml.
-    alternative: >-
-      Not covered. Requires an mcpwn fix to tolerate a null resources result.
-      The entry declares three required inputs of its own, so it would need
-      placeholder values to be exercised meaningfully even after that fix.
+      The image starts and answers initialize and tools/list without
+      credentials, then answers resources/list with a null `resources` field.
+      The VD-8266 scanner fix normalizes it and discovery completes. The entry
+      declares required inputs, but those are operator-supplied at runtime and
+      are not needed to start the entry for a scan.
 
   - file: obot-images/postgresql.yaml
     scan: manual
