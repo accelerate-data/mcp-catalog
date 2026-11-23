@@ -143,7 +143,17 @@ def check_coverage(root: Path, declarations: dict[str, dict[str, object]], fail)
 
 
 def containerized_catalog_files(root: Path) -> set[str]:
-    """Active catalog entries the scan matrix can select, by relative path."""
+    """Active catalog entries the scan matrix can select, by relative path.
+
+    This uses the same file selection the catalog itself uses
+    (`active_catalog_files`, which honours `.ignoreobotcatalogs` and skips
+    dot-directories), while the fan-out selects with `find . -name '*.yaml'`.
+    The two agree today because every containerized entry lives under
+    `obot-images/`. A containerized entry placed under `scripts/` or `.github/`
+    would be scanned by the fan-out yet not require a declaration here, so
+    `test_containerized_universe_matches_the_fanout_selection` pins the two
+    selections together.
+    """
     catalog = load_curated_entries_module()
     selected: set[str] = set()
     for path in catalog.active_catalog_files(root):

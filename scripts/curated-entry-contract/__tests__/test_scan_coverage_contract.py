@@ -99,15 +99,57 @@ class ScanCoverageContractTest(unittest.TestCase):
             errors,
         )
 
-        # Complete: declaring every entry the scan selects passes.
+        # Complete: declaring every containerized entry plus every curated one
+        # passes. The set is read from the tree independently of the function
+        # under test, so this cannot agree with a broken implementation.
+        root = Path.cwd()
+        containerized: set[str] = set()
+        for path in root.rglob("*.yaml"):
+            relative = path.relative_to(root)
+            if any(part.startswith(".") for part in relative.parts):
+                continue
+            manifest = yaml.safe_load(path.read_text())
+            if isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            ):
+                containerized.add(relative.as_posix())
+
         complete = {
             name: {"scan": "manual", "reason": "r", "alternative": "a"}
-            for name in scan_coverage.containerized_catalog_files(Path.cwd())
-            | set(scan_coverage.CURATED_ENTRIES)
+            for name in containerized | set(scan_coverage.CURATED_ENTRIES)
         }
         errors = []
-        scan_coverage.check_coverage(Path.cwd(), complete, errors.append)
+        scan_coverage.check_coverage(root, complete, errors.append)
         self.assertEqual(errors, [])
+        # The independent walk and the implementation must agree, so a change
+        # to either is visible here.
+        self.assertEqual(containerized, scan_coverage.containerized_catalog_files(root))
+
+    def test_containerized_universe_matches_the_fanout_selection(self) -> None:
+        """The entries that must be declared are the ones the fan-out scans.
+
+        The validator selects through the catalog's own ignore rules while the
+        fan-out uses `find . -name '*.yaml'`. They agree today because every
+        containerized entry lives under `obot-images/`; this fails if one is
+        added somewhere the validator skips, which would be scanned yet never
+        require a declaration.
+        """
+        root = Path.cwd()
+        fanout: set[str] = set()
+        for path in root.rglob("*.yaml"):
+            relative = path.relative_to(root)
+            manifest = yaml.safe_load(path.read_text())
+            if isinstance(manifest, dict) and isinstance(
+                manifest.get("containerizedConfig"), dict
+            ):
+                fanout.add(relative.as_posix())
+
+        self.assertEqual(
+            fanout - scan_coverage.containerized_catalog_files(root),
+            set(),
+            "these containerized entries are scanned by the fan-out but could "
+            "not be declared unscannable",
+        )
 
     def test_pr_scan_runs_without_target_privileges_or_secrets(self) -> None:
         workflow = (Path.cwd() / ".github/workflows/mcpwn.yml").read_text()
@@ -347,41 +389,93 @@ class ScanCoverageContractTest(unittest.TestCase):
             self.assertIn("Invalid MCP endpoint path", result.stderr)
             self.assertNotIn("INJECTED", github_env.read_text())
 
-    def test_start_step_rejects_a_malformed_env_payload(self) -> None:
-        """A payload that is not a JSON array fails here, not as a timeout.
+    def test_start_step_accepts_an_entry_that_declares_no_args(self) -> None:
+        """`toJson` of an absent property is the string "null".
 
-        A failing jq inside a process substitution is invisible even under
-        `set -o pipefail`, so the container would start with no inputs and the
-        readiness wait would report a timeout instead of the real cause.
+        Four containerized entries declare no `args` at all, so the payload the
+        matrix produces for them is `null`. Rejecting that stops the container
+        from starting and breaks exactly the entries the scan covers.
         """
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
         steps = workflow["jobs"]["mcpwn-scan"]["steps"]
         start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
 
-        with tempfile.TemporaryDirectory() as directory:
-            temp = Path(directory)
-            docker = temp / "docker"
-            docker.write_text("#!/usr/bin/env python3\nimport sys\n")
-            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
-            env = os.environ | {
-                "ARGS_JSON": json.dumps(["serve"]),
-                "ENV_JSON": "not-json",
-                "GITHUB_ENV": str(temp / "github_env"),
-                "IMAGE": "example.invalid/image:tag",
-                "MCP_PATH": "/",
-                "PATH": f"{temp}:{os.environ['PATH']}",
-                "PORT": "8080",
-            }
+        for args_payload in ("null", "[]"):
+            with self.subTest(args=args_payload):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    capture = temp / "argv.json"
+                    docker = temp / "docker"
+                    docker.write_text(
+                        "#!/usr/bin/env python3\n"
+                        "import json, os, pathlib, sys\n"
+                        "pathlib.Path(os.environ['CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n"
+                    )
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "ARGS_JSON": args_payload,
+                        "CAPTURE": str(capture),
+                        "ENV_JSON": json.dumps([]),
+                        "GITHUB_ENV": str(temp / "github_env"),
+                        "IMAGE": "example.invalid/image:tag",
+                        "MCP_PATH": "/",
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                    }
 
-            result = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", start],
-                env=env,
-                capture_output=True,
-                text=True,
-            )
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", start],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
 
-            self.assertNotEqual(result.returncode, 0, result.stdout)
-            self.assertIn("must be a JSON array", result.stderr)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(capture.read_text())[-1], "example.invalid/image:tag")
+
+    def test_start_step_rejects_a_malformed_env_payload(self) -> None:
+        """A payload that is not a JSON array fails here, not as a timeout.
+
+        A failing jq inside a process substitution is invisible even under
+        `set -o pipefail`, so the container would start with no inputs and the
+        readiness wait would report a timeout instead of the real cause. An
+        array of the wrong element shape has the same effect, so the elements
+        are checked too.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        for env_payload, why in (
+            ("not-json", "not JSON"),
+            (json.dumps([{"novalue": 1}]), "an element with no string key"),
+            (json.dumps([1, 2]), "an element that is not an object"),
+        ):
+            with self.subTest(payload=env_payload):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    docker = temp / "docker"
+                    docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "ARGS_JSON": json.dumps(["serve"]),
+                        "ENV_JSON": env_payload,
+                        "GITHUB_ENV": str(temp / "github_env"),
+                        "IMAGE": "example.invalid/image:tag",
+                        "MCP_PATH": "/",
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                    }
+
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", start],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0, f"{why} must be rejected")
+                    self.assertIn("ENV_JSON must be", result.stderr)
 
     def test_worker_validates_env_names_and_keeps_no_secrets_scope(self) -> None:
         """The worker rejects a malformed env name, as the PR lane does.
@@ -395,7 +489,13 @@ class ScanCoverageContractTest(unittest.TestCase):
         by_name = {step.get("name"): step for step in workflow["jobs"]["scan"]["steps"]}
 
         self.assertIn('A-Za-z_][A-Za-z0-9_]*', by_name["Start mcp server"]["run"])
-        self.assertNotIn("secrets", json.dumps(by_name["Start mcp server"].get("env", {})))
+        # No step in this workflow may take the runner's secrets.
+        for step in workflow["jobs"]["scan"]["steps"]:
+            self.assertNotIn(
+                "secrets",
+                json.dumps(step.get("env", {})),
+                f"{step.get('name')} still scopes the runner secrets",
+            )
 
     def test_readiness_wait_rejects_an_inconclusive_status(self) -> None:
         """A status that is not a real HTTP code must not read as ready.

@@ -100,6 +100,14 @@ jobs:
             echo "Container image must not be empty" >&2
             exit 1
           fi
+          # The image reference reaches later steps through $GITHUB_ENV, where a
+          # newline starts a second variable assignment. It arrives from a
+          # dispatch built out of catalog YAML, so require the shape of a real
+          # image reference rather than only a non-empty value.
+          if [[ ! "$IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]]; then
+            echo "Invalid container image reference: $IMAGE" >&2
+            exit 1
+          fi
           # Every value below reaches later steps through $GITHUB_ENV, where a
           # newline starts a second variable assignment. These arrive from a
           # dispatch built out of catalog YAML, so a plain path is required
