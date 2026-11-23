@@ -135,8 +135,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1/
-          repository: drpebcak/mcpwn
-          ref: remote
+          # VD-8266: the fork carries the null-result discovery fix.
+          repository: accelerate-data/Mcpwn
+          ref: b835b16f565c43f43bf948ceb7ca8334441f7995
 
       - name: Set up Python
         uses: actions/setup-python@v6
