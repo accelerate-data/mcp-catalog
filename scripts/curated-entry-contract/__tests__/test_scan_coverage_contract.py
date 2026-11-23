@@ -158,15 +158,28 @@ class ScanCoverageContractTest(unittest.TestCase):
         )
 
     def test_pr_scan_runs_without_target_privileges_or_secrets(self) -> None:
-        workflow = (Path.cwd() / ".github/workflows/mcpwn.yml").read_text()
+        workflow_text = (Path.cwd() / ".github/workflows/mcpwn.yml").read_text()
+        workflow = yaml.safe_load(workflow_text)
 
-        self.assertIn("  pull_request:\n", workflow)
-        self.assertNotIn("pull_request_target", workflow)
-        self.assertNotIn("env: ${{ secrets }}", workflow)
-        self.assertNotIn("pull-requests: write", workflow)
-        self.assertNotIn("id-token: write", workflow)
-        self.assertNotIn("changed_files='${{", workflow)
-        self.assertIn("CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}", workflow)
+        self.assertIn("  pull_request:\n", workflow_text)
+        self.assertNotIn("pull_request_target", workflow_text)
+        self.assertNotIn("env: ${{ secrets }}", workflow_text)
+        self.assertNotIn("pull-requests: write", workflow_text)
+        self.assertNotIn("id-token: write", workflow_text)
+        self.assertNotIn("changed_files='${{", workflow_text)
+        self.assertIn(
+            "CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}", workflow_text
+        )
+        # No step may take a secret into its environment, in any form. The bare
+        # `${{ secrets }}` match above is not enough: `toJson(secrets)` and
+        # `secrets.GITHUB_TOKEN` belong to the same context.
+        for job in workflow["jobs"].values():
+            for step in job.get("steps") or []:
+                self.assertNotIn(
+                    "secrets",
+                    json.dumps(step.get("env", {})),
+                    f"{step.get('name')} scopes a secret into its environment",
+                )
 
     def test_docker_arguments_remain_discrete(self) -> None:
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
@@ -261,10 +274,11 @@ class ScanCoverageContractTest(unittest.TestCase):
             self.assertIn("MCP_PATH=/tableau-mcp", github_env.read_text())
 
     def test_an_entry_without_static_values_forwards_no_environment(self) -> None:
-        """An entry with no static value starts the container with no -e flag.
+        """A value-less input is skipped, not forwarded as KEY=null.
 
-        Most inherited entries take their inputs from the operator, so their
-        filtered env list is empty; the step must still start the container.
+        An entry can declare a key without a static value; the matrix filters
+        those out, and the loop repeats the filter so the container never gets
+        `-e KEY=null`. A valued sibling in the same payload still forwards.
         """
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
         steps = workflow["jobs"]["mcpwn-scan"]["steps"]
@@ -283,7 +297,7 @@ class ScanCoverageContractTest(unittest.TestCase):
             env = os.environ | {
                 "ARGS_JSON": json.dumps(["serve"]),
                 "CAPTURE": str(capture),
-                "ENV_JSON": json.dumps([]),
+                "ENV_JSON": json.dumps([{"key": "NO_VALUE"}, {"key": "HAS", "value": "v"}]),
                 "GITHUB_ENV": str(temp / "github_env"),
                 "IMAGE": "example.invalid/image:tag",
                 "MCP_PATH": "/",
@@ -294,8 +308,11 @@ class ScanCoverageContractTest(unittest.TestCase):
             subprocess.run(["bash", "-euo", "pipefail", "-c", start], check=True, env=env)
 
             argv = json.loads(capture.read_text())
-            self.assertNotIn("-e", argv)
-            self.assertEqual(argv[-2:], ["example.invalid/image:tag", "serve"])
+            self.assertIn("HAS=v", argv)
+            self.assertNotIn("NO_VALUE=null", argv)
+            self.assertFalse(
+                any("NO_VALUE" in arg for arg in argv), f"value-less key forwarded: {argv}"
+            )
 
     def test_a_missing_declared_path_falls_back_to_the_root(self) -> None:
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
