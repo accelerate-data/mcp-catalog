@@ -117,32 +117,31 @@ entries:
   - file: obot-images/brave_search.yaml
     scan: manual
     reason: >-
-      The image requires its Brave API key as a process argument, and the scan
-      starts a container with an entry's static values only. The image is
-      launched by an mmmcp wrapper that forwards an environment variable to
-      its child only when Obot lists it in MMMCP_META_ENV, which Obot derives
-      from the deployment's configured inputs; the scan sets neither, so
-      `brave-search-mcp-server` exits with `Error: --brave-api-key is
-      required`. The entry itself is correct for Obot: with the key supplied
-      as an environment variable plus MMMCP_META_ENV, the image boots and
-      answers initialize.
+      The image needs its Brave API key before it starts the server, and the
+      scan supplies only an entry's static values, which contain no credential.
+      The key reaches the server in two layers: Obot passes it to the container
+      as an environment variable and lists it in MMMCP_META_ENV, and the
+      image's wrapper then forwards it to the child process. The scan sets
+      neither, so the child starts with no key and exits with `Error:
+      --brave-api-key is required`. The entry is correct for Obot.
     alternative: >-
       The entry is exercised end to end by the Obot runtime rather than this
-      scan: the wrapper forwards the deployment's BRAVE_API_KEY through
-      MMMCP_META_ENV, and the image was verified locally to serve MCP over
-      HTTP on its declared port once that variable reaches the child. The
-      entry is also marked deprecated in metadata, so it is not offered for
-      new installs.
+      scan. Verified with a real key: launched as Obot launches it
+      (`-e BRAVE_API_KEY=... -e MMMCP_META_ENV=BRAVE_API_KEY`, declared args)
+      the image runs and answers initialize with HTTP 200; the same env without
+      MMMCP_META_ENV exits 1 with `--brave-api-key is required`. See the note
+      on this entry's contract in the catalog repository's AGENTS.md. The entry
+      is also marked deprecated in metadata, so it is not offered for new
+      installs.
 
   - file: obot-images/grafana.yaml
     scan: manual
     reason: >-
-      The image authenticates every MCP request and answers 403 without a
-      Grafana instance URL and a service-account token, both of which are
-      operator-supplied. Unlike the images that take their inputs through an
-      mmmcp wrapper, this one reads GRAFANA_URL directly, so the scan could
-      supply it, but the token that authorizes the MCP path cannot come from
-      an unprivileged pull request.
+      The image binds its declared /mcp path but answers 403 `forbidden: host
+      not allowed` without a Grafana instance URL and a service-account token.
+      The entry declares no static value for GRAFANA_URL, and the scan
+      forwards only static values, so the scan cannot supply it; the token that
+      authorizes the MCP path is operator-supplied in any case.
     alternative: >-
       The entry pins GRAFANA_URL as required and
       GRAFANA_SERVICE_ACCOUNT_TOKEN as a sensitive input, so Studio cannot
@@ -214,18 +213,13 @@ entries:
   - file: obot-images/gitlab.yaml
     scan: manual
     reason: >-
-      The image exits with status 1 before binding its port and writes nothing
-      to its own log, so there is no output to attribute to a missing input.
-      The weekly fan-out reported `GITLAB_PERSONAL_ACCESS_TOKEN environment
-      variable is not set` and `Either set GITLAB_PERSONAL_ACCESS_TOKEN or
-      enable OAuth with GITLAB_USE_OAUTH=true`; that text is consistent with an
-      operator-supplied token being required, but the container's silence means
-      the exact gate is unconfirmed here.
+      The image exits 1 with `GITLAB_PERSONAL_ACCESS_TOKEN environment variable
+      is not set` and `Either set GITLAB_PERSONAL_ACCESS_TOKEN or enable OAuth
+      with GITLAB_USE_OAUTH=true`. The token is operator-supplied.
     alternative: >-
       The entry declares GITLAB_PERSONAL_ACCESS_TOKEN as a required, sensitive
-      input. The merge gate is the contract review of that input; the image's
-      silent exit should be resolved before this entry is offered for new
-      installs.
+      input. The merge gate is the contract review of that input; the scan
+      cannot supply it without a repository secret.
 
   - file: obot-images/azure.yaml
     scan: manual
@@ -336,10 +330,11 @@ entries:
   - file: obot-images/mongodb_database.yaml
     scan: manual
     reason: >-
-      The image exits before serving with `Could not determine home
-      directory` while resolving `os.homedir()` for its state file, the same
-      passwd-entry defect as obot-images/azure.yaml. The entry also declares
-      an operator-supplied connection string.
+      The image exits before serving with `SystemError [ERR_SYSTEM_ERROR]: A
+      system error occurred: uv_os_homedir returned ENOENT (no such file or
+      directory)` while resolving `os.homedir()` for its state file. Its own
+      runtime user has no passwd entry. The entry also declares an
+      operator-supplied connection string.
     alternative: >-
       Not covered. The image needs a resolvable passwd entry or a launcher
       that sets HOME before an automated scan can say anything about its
@@ -348,10 +343,11 @@ entries:
   - file: obot-images/mongodb_atlas_management.yaml
     scan: manual
     reason: >-
-      The image exits before serving with `Could not determine home
-      directory` while resolving `os.homedir()`, the same passwd-entry defect
-      as obot-images/azure.yaml. The entry also declares operator-supplied API
-      client credentials.
+      The image exits before serving with `SystemError [ERR_SYSTEM_ERROR]: A
+      system error occurred: uv_os_homedir returned ENOENT (no such file or
+      directory)` while resolving `os.homedir()`, the same passwd-entry defect
+      as obot-images/mongodb_database.yaml. The entry also declares
+      operator-supplied API client credentials.
     alternative: >-
       Not covered. The image needs a resolvable passwd entry or a launcher
       that sets HOME before an automated scan can say anything about its

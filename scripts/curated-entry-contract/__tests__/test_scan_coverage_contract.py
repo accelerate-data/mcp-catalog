@@ -71,7 +71,12 @@ class ScanCoverageContractTest(unittest.TestCase):
         )
 
     def test_accepts_a_containerized_entry_the_scan_cannot_start(self) -> None:
-        """A containerized inherited entry may record that it is unscannable."""
+        """Every containerized entry the scan selects must be declared.
+
+        The declaration is required, not merely permitted: that is what keeps
+        coverage accurate when a new containerized entry arrives, instead of
+        letting it be added and scanned with no recorded decision.
+        """
         errors: list[str] = []
         declarations = {
             name: {"scan": "manual", "reason": "r", "alternative": "a"}
@@ -83,8 +88,25 @@ class ScanCoverageContractTest(unittest.TestCase):
             "alternative": "a",
         }
 
+        # Incomplete: the other containerized entries the scan selects are
+        # undeclared, and each must be reported.
         scan_coverage.check_coverage(Path.cwd(), declarations, errors.append)
+        self.assertTrue(
+            any(
+                "declares a containerizedConfig image" in error and "no coverage" in error
+                for error in errors
+            ),
+            errors,
+        )
 
+        # Complete: declaring every entry the scan selects passes.
+        complete = {
+            name: {"scan": "manual", "reason": "r", "alternative": "a"}
+            for name in scan_coverage.containerized_catalog_files(Path.cwd())
+            | set(scan_coverage.CURATED_ENTRIES)
+        }
+        errors = []
+        scan_coverage.check_coverage(Path.cwd(), complete, errors.append)
         self.assertEqual(errors, [])
 
     def test_pr_scan_runs_without_target_privileges_or_secrets(self) -> None:
@@ -285,13 +307,158 @@ class ScanCoverageContractTest(unittest.TestCase):
             names.index("Run mcpwn scan"),
         )
 
-    def test_readiness_wait_ignores_a_bare_tcp_accept(self) -> None:
-        """A refused HTTP endpoint must not be read as ready.
+    def test_start_step_rejects_a_path_that_would_escape_github_env(self) -> None:
+        """A declared path cannot inject a variable into later steps.
+
+        The path comes from catalog YAML in the pull request, and the start
+        step writes it to $GITHUB_ENV. A newline there starts a second
+        assignment, so an entry could set an arbitrary variable in the steps
+        that follow.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            docker = temp / "docker"
+            docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            github_env = temp / "github_env"
+            github_env.write_text("")
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "ENV_JSON": json.dumps([]),
+                "GITHUB_ENV": str(github_env),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/ok\nINJECTED=1",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", start],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("Invalid MCP endpoint path", result.stderr)
+            self.assertNotIn("INJECTED", github_env.read_text())
+
+    def test_start_step_rejects_a_malformed_env_payload(self) -> None:
+        """A payload that is not a JSON array fails here, not as a timeout.
+
+        A failing jq inside a process substitution is invisible even under
+        `set -o pipefail`, so the container would start with no inputs and the
+        readiness wait would report a timeout instead of the real cause.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        start = next(step["run"] for step in steps if step.get("name") == "Start mcp server")
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            docker = temp / "docker"
+            docker.write_text("#!/usr/bin/env python3\nimport sys\n")
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            env = os.environ | {
+                "ARGS_JSON": json.dumps(["serve"]),
+                "ENV_JSON": "not-json",
+                "GITHUB_ENV": str(temp / "github_env"),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/",
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "PORT": "8080",
+            }
+
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", start],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("must be a JSON array", result.stderr)
+
+    def test_worker_validates_env_names_and_keeps_no_secrets_scope(self) -> None:
+        """The worker rejects a malformed env name, as the PR lane does.
+
+        It also no longer needs the runner's secrets: nothing is started from
+        the runner environment now that bare `-e KEY` forwarding is gone.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        by_name = {step.get("name"): step for step in workflow["jobs"]["scan"]["steps"]}
+
+        self.assertIn('A-Za-z_][A-Za-z0-9_]*', by_name["Start mcp server"]["run"])
+        self.assertNotIn("secrets", json.dumps(by_name["Start mcp server"].get("env", {})))
+
+    def test_readiness_wait_rejects_an_inconclusive_status(self) -> None:
+        """A status that is not a real HTTP code must not read as ready.
 
         Docker's userland proxy completes the TCP handshake on a published
-        port even when nothing inside the container is listening, so a
-        connect-based probe passes against a container that has not started
-        serving. Readiness has to come from an HTTP response.
+        port even when nothing inside the container is listening, so readiness
+        has to come from an HTTP response. `000` is curl's "could not
+        connect", and an empty value means curl was missing or silent; neither
+        may be mistaken for a serving container.
+        """
+        workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
+        steps = workflow["jobs"]["mcpwn-scan"]["steps"]
+        wait = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Wait for the mcp server to accept connections"
+        )
+
+        for reported in ("000", ""):
+            with self.subTest(reported=reported):
+                with tempfile.TemporaryDirectory() as directory:
+                    temp = Path(directory)
+                    log = temp / "container.log"
+                    log.write_text("still starting\n")
+                    docker = temp / "docker"
+                    docker.write_text(
+                        "#!/usr/bin/env python3\n"
+                        "import os, pathlib, sys\n"
+                        "if sys.argv[1] == 'inspect':\n"
+                        "    print('running')\n"
+                        "elif sys.argv[1] == 'logs':\n"
+                        "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
+                    )
+                    docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+                    curl = temp / "curl"
+                    curl.write_text(
+                        "#!/usr/bin/env python3\n"
+                        f"import sys; sys.stdout.write({reported!r})\n"
+                    )
+                    curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+                    env = os.environ | {
+                        "LOGS": str(log),
+                        "PATH": f"{temp}:{os.environ['PATH']}",
+                        "PORT": "8080",
+                        "READY_TIMEOUT_SECONDS": "2",
+                    }
+
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", wait],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertIn("did not answer HTTP", result.stderr + result.stdout)
+
+    def test_readiness_wait_accepts_any_real_http_status(self) -> None:
+        """A 404 still means the server is answering.
+
+        Readiness proves the server is reachable; the declared path is what the
+        scan reports on, so an entry serving elsewhere must surface as the
+        scan's own 404 rather than as a readiness timeout.
         """
         workflow = yaml.safe_load((Path.cwd() / ".github/workflows/mcpwn.yml").read_text())
         steps = workflow["jobs"]["mcpwn-scan"]["steps"]
@@ -303,25 +470,20 @@ class ScanCoverageContractTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            log = temp / "container.log"
-            log.write_text("still starting\n")
             docker = temp / "docker"
             docker.write_text(
                 "#!/usr/bin/env python3\n"
-                "import os, pathlib, sys\n"
+                "import sys\n"
                 "if sys.argv[1] == 'inspect':\n"
                 "    print('running')\n"
                 "elif sys.argv[1] == 'logs':\n"
-                "    print(pathlib.Path(os.environ['LOGS']).read_text(), end='')\n"
+                "    pass\n"
             )
             docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
-            # curl reports 000 — the endpoint is not answering — and must not be
-            # mistaken for success just because the container is "running".
             curl = temp / "curl"
-            curl.write_text("#!/usr/bin/env python3\nprint('000')\n")
+            curl.write_text("#!/usr/bin/env python3\nimport sys; sys.stdout.write('404')\n")
             curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
             env = os.environ | {
-                "LOGS": str(log),
                 "PATH": f"{temp}:{os.environ['PATH']}",
                 "PORT": "8080",
                 "READY_TIMEOUT_SECONDS": "2",
@@ -331,8 +493,8 @@ class ScanCoverageContractTest(unittest.TestCase):
                 ["bash", "-euo", "pipefail", "-c", wait], env=env, capture_output=True, text=True
             )
 
-            self.assertNotEqual(result.returncode, 0, result.stdout)
-            self.assertIn("did not answer HTTP", result.stderr + result.stdout)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("answered HTTP 404", result.stdout)
 
     def test_readiness_wait_fails_when_the_container_exits(self) -> None:
         """The wait reports the container's logs and fails when it exited."""

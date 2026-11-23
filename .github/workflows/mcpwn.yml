@@ -158,6 +158,8 @@ jobs:
           MCP_PATH: ${{ matrix.server.containerizedConfig.path }}
           PORT: ${{ matrix.server.containerizedConfig.port }}
         run: |
+          set -euo pipefail
+
           if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
             echo "Invalid container port: $PORT" >&2
             exit 1
@@ -166,14 +168,36 @@ jobs:
             echo "Container image must not be empty" >&2
             exit 1
           fi
+
           # Accelerate Data addition: an entry declares where its MCP endpoint
           # lives, and several declare something other than the root. The scan
           # probes the declared path, so it is carried into the next step
           # rather than defaulting to "/".
+          #
+          # The value comes from catalog YAML in the pull request, and this
+          # step writes it to $GITHUB_ENV, where a newline would start a second
+          # variable assignment and inject env vars into the later steps that
+          # run with the scan's token. Only a plain URL path is accepted.
           if [[ -z "$MCP_PATH" ]]; then
             MCP_PATH="/"
           fi
-          echo "MCP_PATH=$MCP_PATH" >> "$GITHUB_ENV"
+          if [[ ! "$MCP_PATH" =~ ^/[A-Za-z0-9._~/-]*$ ]]; then
+            echo "Invalid MCP endpoint path: $MCP_PATH" >&2
+            exit 1
+          fi
+          printf 'MCP_PATH=%s\n' "$MCP_PATH" >> "$GITHUB_ENV"
+
+          # A malformed payload must fail here. A failing jq inside a process
+          # substitution is invisible even under `set -o pipefail`, so the
+          # container would otherwise start with no inputs and the readiness
+          # wait would report a timeout instead of the real cause.
+          for payload in ENV_JSON ARGS_JSON; do
+            value="${!payload}"
+            if [[ -n "$value" ]] && ! jq -e 'type == "array"' <<< "$value" >/dev/null 2>&1; then
+              echo "$payload must be a JSON array" >&2
+              exit 1
+            fi
+          done
 
           docker_args=(run -d --name mcpwn-target -p "8080:$PORT")
           # Each forwarded input arrives as a key/value pair. The matrix step
@@ -193,7 +217,7 @@ jobs:
             server_args+=("$arg")
           done < <(jq --raw-output0 '.[]?' <<< "$ARGS_JSON")
 
-          docker "${docker_args[@]}" "$IMAGE" "${server_args[@]}"
+          docker "${docker_args[@]}" "$IMAGE" ${server_args[@]+"${server_args[@]}"}
 
       - name: Wait for the mcp server to accept connections
         env:
@@ -230,11 +254,12 @@ jobs:
               docker logs mcpwn-target 2>&1 || true
               exit 1
             fi
-            # curl prints 000 itself when it cannot connect, so the exit
-            # status is discarded rather than substituting a second value.
+            # curl prints 000 itself when it cannot connect. Require a real
+            # status: an empty value means curl was missing or produced no
+            # output, which must not be read as ready.
             status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
               "http://127.0.0.1:${PORT}${MCP_PATH}" 2>/dev/null || true)
-            if [[ "$status" != "000" ]]; then
+            if [[ "$status" =~ ^[1-5][0-9]{2}$ ]]; then
               echo "Container answered HTTP $status on ${MCP_PATH} after $(( SECONDS - started ))s."
               exit 0
             fi

@@ -107,12 +107,12 @@ def load_declarations(path: Path, fail) -> dict[str, dict[str, object]]:
 def check_coverage(root: Path, declarations: dict[str, dict[str, object]], fail) -> None:
     """The declarations match the entries the scan can select.
 
-    Every curated entry must be declared. A declaration may also cover an
-    inherited catalog entry, but only the ones the scan can actually select:
-    an entry that declares a containerizedConfig image. An entry the scan
-    cannot start is exactly the one that needs a recorded reason, and most of
-    those are inherited from upstream rather than first-party, so restricting
-    declarations to curated entries left them with no way to say so.
+    Every entry the scan can select must be declared, not only the curated
+    ones: a containerized entry the scan cannot start is exactly the one that
+    needs a recorded reason, and most of those are inherited from upstream
+    rather than first-party. Requiring the declaration is what keeps coverage
+    accurate when a new containerized entry arrives — permitting it would let
+    one be added and scanned with no recorded decision at all.
     """
     containerized = containerized_catalog_files(root)
 
@@ -121,6 +121,14 @@ def check_coverage(root: Path, declarations: dict[str, dict[str, object]], fail)
             fail(
                 f"{COVERAGE_FILE}: {filename} has no scan coverage declaration: "
                 "a curated entry must state whether the automated scan covers it"
+            )
+
+    for filename in sorted(containerized - set(CURATED_ENTRIES)):
+        if filename not in declarations:
+            fail(
+                f"{COVERAGE_FILE}: {filename} declares a containerizedConfig image "
+                "and the scan selects it, but has no coverage declaration: state "
+                "whether the scan covers it, and if not, why"
             )
 
     for filename in sorted(declarations):
@@ -141,7 +149,11 @@ def containerized_catalog_files(root: Path) -> set[str]:
     for path in catalog.active_catalog_files(root):
         try:
             manifest = yaml.safe_load(path.read_text())
-        except yaml.YAMLError:
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            # validate-curated-entries.py reports an unreadable or unparsable
+            # manifest. This check only needs to know which entries the scan
+            # can select, so it skips one it cannot read rather than failing
+            # the run with a traceback for a problem already reported.
             continue
         if isinstance(manifest, dict) and isinstance(
             manifest.get("containerizedConfig"), dict
