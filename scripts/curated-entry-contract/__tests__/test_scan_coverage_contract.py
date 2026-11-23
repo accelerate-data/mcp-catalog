@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import os
@@ -17,6 +18,11 @@ SPEC = importlib.util.spec_from_file_location("scan_coverage_contract", MODULE_P
 assert SPEC is not None and SPEC.loader is not None
 scan_coverage = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(scan_coverage)
+
+
+def base64_std(value: object) -> str:
+    """Base64 of the JSON the fan-out encodes for a worker dispatch."""
+    return base64.b64encode(json.dumps(value).encode()).decode()
 
 
 class ScanCoverageContractTest(unittest.TestCase):
@@ -398,9 +404,7 @@ class ScanCoverageContractTest(unittest.TestCase):
         `8080` as a number and is one of the two entries the scan covers.
         """
         root = Path.cwd()
-        # The matrix emits `toJson` of the declared args, and "null" when the
-        # entry declares none.
-        payloads = {"<no args>": "null"}
+        payloads: dict[str, str] = {}
         for path in sorted(root.rglob("*.yaml")):
             if any(part.startswith(".") for part in path.relative_to(root).parts):
                 continue
@@ -410,9 +414,9 @@ class ScanCoverageContractTest(unittest.TestCase):
             )):
                 continue
             args = manifest["containerizedConfig"].get("args")
-            payloads[f"{path.name}:{json.dumps(args)}"] = json.dumps(
-                [] if args is None else args
-            )
+            # The matrix emits `toJson` of the declared property, so an entry
+            # that declares no `args` produces the string "null" — not "[]".
+            payloads[path.name] = json.dumps(args) if args is not None else "null"
 
         workflow = yaml.safe_load((root / ".github/workflows/mcpwn.yml").read_text())
         steps = workflow["jobs"]["mcpwn-scan"]["steps"]
@@ -509,15 +513,65 @@ class ScanCoverageContractTest(unittest.TestCase):
         by_name = {step.get("name"): step for step in workflow["jobs"]["scan"]["steps"]}
 
         self.assertIn('A-Za-z_][A-Za-z0-9_]*', by_name["Start mcp server"]["run"])
-        # No step may take the whole secret context into its environment. A
-        # step scoped `env: ${{ secrets }}` exposes every repository secret to
-        # that shell; the registry token in `with:` is a separate, single use.
+        # No step may take the secret context into its environment. Any
+        # reference at all counts, not just the bare `${{ secrets }}` form:
+        # `toJson(secrets)` and `secrets.GITHUB_TOKEN` belong to the same
+        # context. The registry token in `with:` is a separate, single use and
+        # is not an `env:` scope.
         for step in workflow["jobs"]["scan"]["steps"]:
             self.assertNotIn(
-                "${{ secrets }}",
+                "secrets",
                 json.dumps(step.get("env", {})),
-                f"{step.get('name')} scopes the whole secret context",
+                f"{step.get('name')} scopes a secret into its environment",
             )
+
+    def test_worker_rejects_the_same_bad_payloads_as_the_pr_lane(self) -> None:
+        """Both lanes unpack the payloads the same way, so both must validate.
+
+        The unpacking loop reads through a process substitution, where a jq
+        failure is discarded and the container starts with no inputs. The
+        worker is the higher-privilege lane, so its guard needs its own
+        coverage rather than riding on the pull-request one.
+        """
+        workflow = yaml.safe_load(
+            (Path.cwd() / ".github/workflows/mcpwn-worker.yml").read_text()
+        )
+        steps = workflow["jobs"]["scan"]["steps"]
+        decode = next(
+            step["run"]
+            for step in steps
+            if step.get("name") == "Decode args/env and build docker flags"
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            base = {
+                "PATH": f"{temp}:{os.environ['PATH']}",
+                "GITHUB_ENV": str(temp / "github_env"),
+                "IMAGE": "example.invalid/image:tag",
+                "MCP_PATH": "/",
+                "TARGET_PORT": "8080",
+            }
+            for args_b64, env_b64, expected in (
+                (base64_std([]), base64_std([]), 0),
+                (base64_std(None), base64_std(None), 0),
+                (base64_std([8080]), base64_std([]), 0),
+                (base64_std({"a": 1}), base64_std([]), 1),
+                (base64_std([]), base64_std([{"novalue": 1}]), 1),
+                (base64_std([]), base64_std([1]), 1),
+            ):
+                with self.subTest(args=args_b64, env=env_b64):
+                    Path(base["GITHUB_ENV"]).write_text("")
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", decode],
+                        env=os.environ | base | {"ARGS_B64": args_b64, "ENV_B64": env_b64},
+                        capture_output=True,
+                        text=True,
+                    )
+                    if expected == 0:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                    else:
+                        self.assertNotEqual(result.returncode, 0, result.stdout)
 
     def test_readiness_wait_rejects_an_inconclusive_status(self) -> None:
         """A status that is not a real HTTP code must not read as ready.

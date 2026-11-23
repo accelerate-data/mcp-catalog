@@ -217,8 +217,9 @@ jobs:
 
           docker_args=(run -d --name mcpwn-target -p "8080:$PORT")
           # Each forwarded input arrives as a key/value pair. The matrix step
-          # already keeps only inputs that carry a static value, so the value
-          # is always present; forwarding a bare key would read the runner's
+          # already keeps only inputs that carry a static value, and the filter
+          # here repeats that so an entry without one is skipped rather than
+          # started as KEY=null; forwarding a bare key would read the runner's
           # environment and start the image with an empty variable.
           while IFS= read -r -d '' key && IFS= read -r -d '' value; do
             if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
@@ -226,7 +227,7 @@ jobs:
               exit 1
             fi
             docker_args+=(-e "$key=$value")
-          done < <(jq --raw-output0 '.[]? | .key, .value' <<< "$ENV_JSON")
+          done < <(jq --raw-output0 '.[]? | select(.value != null) | .key, .value' <<< "$ENV_JSON")
 
           server_args=()
           while IFS= read -r -d '' arg; do
